@@ -91,3 +91,67 @@ trait SmtLibParsers[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
   lazy val resultParser: PackratParser[FromSmtsMsg] = { errorParser | satParser | modelParser | unsatCoreParser | valuesParser }
 
 }
+
+/** This trait contains parsers for the smt lib 2 commands. Used for testing. */
+trait SmtLibCommandParsers[Expr, Ident, Sort] extends SmtLibParsers[Expr, Ident, Sort] {
+  import Messages._
+
+  lazy val intParser: PackratParser[String] = {
+    """[1-9][0-9]*""".r ^^ { case n => n } |
+    "0" ^^ { case n => n }
+  }
+
+  lazy val realParser: PackratParser[String] = {
+    intParser ~ "." ~ intParser ^^ { case int~_~dec => int + "." + dec } |
+    intParser <~ "." ^^ { case int => int + "." } |
+    "." ~> intParser ^^ { case dec => "."  + dec} |
+    intParser ^^ { case res => res }
+  }
+
+  lazy val commandParser: PackratParser[ToSmtsMsg] = {
+    "(" ~ "set-option" ~> """[:][a-zA-Z][a-zA-Z\-]""".r <~ ")" ^^ { case option => SetOption(option) } |
+    "(" ~ "set-option" ~> """[:][a-zA-Z][a-zA-Z\-]""".r ~ ("true" | "false" | intParser) <~ ")" ^^ {
+      case option~value => SetOption(option + " " + value)
+    } |
+    "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ realParser <~ ")" ^^ {
+      case c~info~value => SetInfo(c + info,Some(value))
+    } |
+    "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ identParser <~ ")" ^^ {
+      case c~info~value => SetInfo(c + info,Some(value))
+    } |
+    "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ "\"" ~ identParser <~ "\"" ~ ")" ^^ {
+      case c~info~_~value => SetInfo(c + info,Some("\"" + value + "\""))
+    } |
+    "(" ~ "set-info" ~> identParser <~ ")" ^^ {
+      case info => SetInfo(info)
+    } |
+    "(" ~ "set-logic" ~> identParser <~ ")" ^^ { case logic => SetLogic(logic) } |
+    "(" ~ "declare-sort" ~> smt2Ident ~ intParser <~ ")" ^^ {
+      case id~arity => DeclareSort(id,arity.toInt)
+    } |
+    "(" ~ "define-sort" ~> smt2Sort ~ "(" ~ rep(smt2Ident) ~ ")" ~ smt2Sort <~ ")" ^^ {
+      case id~_~sorts~_~sort => DefineSort(id,sorts,sort)
+    } |
+    "(" ~ "declare-fun" ~> smt2Ident ~ "(" ~ rep(smt2Sort) ~ ")" ~ smt2Sort <~ ")" ^^ {
+      case id~_~sorts~_~sort => DeclareFun(id,sorts,sort)
+    } |
+    "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~ smt2Sort ~ smt2Expr <~ ")" ^^ {
+      case id~_~ids~_~sort~expr => DefineFun(id,ids,sort,expr)
+    } |
+    "(" ~ "push" ~> intParser <~ ")" ^^ { case n => Push(n.toInt) } |
+    "(" ~ "pop" ~> intParser <~ ")" ^^ { case n => Pop(n.toInt) } |
+    "(" ~ "check-sat" ~ ")" ^^ { case _ => CheckSat } |
+    "(" ~ "get-model" ~ ")" ^^ { case _ => GetModel } |
+    "(" ~ "get-value" ~ "(" ~> rep1(smt2Expr) <~ ")" ^^ { case values => GetValue(values) } |
+    "(" ~ "get-unsat-core" ~ ")" ^^ { case _ => GetUnsatCore } |
+    "(" ~ "assert" ~> smt2Expr <~ ")" ^^ { case expr => Assert(expr) } |
+    "(" ~ "assert" ~ "(" ~ "!" ~> smt2Expr ~ ":named" ~ smt2Ident <~ ")" ^^ { case expr~_~id => Assert(expr,Some(id)) } |
+    "(" ~ "exit" ~ ")" ^^ { case _ => KillSolver } |
+    // Unsupported commands.
+    "(" ~ "get-assertions" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-assertions.") } |
+    "(" ~ "get-proof" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-proof.") } |
+    "(" ~ "get-assignment" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-assgnment.") } |
+    "(" ~ "get-option" ~> identParser <~ ")" ^^ { case option => DummyMsg("Unsupported command get-option (" + option + ").") } |
+    "(" ~ "get-info" ~> identParser <~ ")" ^^ { case info => DummyMsg("Unsupported command get-info (" + info + ").") }
+  }
+}

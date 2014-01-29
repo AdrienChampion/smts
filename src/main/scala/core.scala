@@ -74,8 +74,19 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     /** Extended by all the messages Smts can receive. */
     sealed trait ToSmtsMsg
 
+    /** Dummy message for testing purposes. */
+    case class DummyMsg(msg: String) extends ToSmtsMsg
+
+    /** Kills the underlying solver process. */
+    object KillSolver extends ToSmtsMsg
+
     /** Set-option command. */
     case class SetOption(option: String) extends ToSmtsMsg
+
+    /** Set-info command. */
+    case class SetInfo(
+      option: String, value: Option[String] = None
+    ) extends ToSmtsMsg
 
     /** Set-logic command. */
     class SetLogic private(val logic: logics.Logic) extends ToSmtsMsg
@@ -86,13 +97,13 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
       def apply(logic: logics.Logic) = new SetLogic(logic)
 
-      def unapply(logic: { def apply(w: Writer): Unit }) = Some(logic)
+      def unapply(arg: SetLogic) = Some(arg.logic)
     }
 
     /** Declare-sort command. */
     class DeclareSort private(
-      decs: Traversable[(Ident,Int)]
-    ) extends SmtsMsg
+      val decs: Traversable[(Ident,Int)]
+    ) extends ToSmtsMsg
     /** Companion object for '''DeclareSort'''. */
     object DeclareSort {
 
@@ -102,12 +113,12 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
       def apply(id: Ident, arity: Int) = new DeclareSort((id,arity) :: Nil)
 
-      def unapply(decs: Traversable[(Ident, Int)]) = Some(decs)
+      def unapply(arg: DeclareSort) = Some(arg.decs)
     }
 
     /** Define-sort command. */
     class DefineSort private(
-      defs: Traversable[(Sort, Traversable[Ident], Sort)]
+      val defs: Traversable[(Sort, Traversable[Ident], Sort)]
     ) extends ToSmtsMsg
     /** Companion object for '''DefineSort'''. */
     object DefineSort {
@@ -118,7 +129,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
       def apply(name: Sort, ids: Traversable[Ident], sort: Sort) = new DefineSort((name,ids,sort) :: Nil)
 
-      def unapply(defs: Traversable[(Sort, Traversable[Ident], Sort)]) = Some(defs)
+      def unapply(arg: DefineSort) = Some(arg.defs)
     }
 
     /** Declare-fun command. */
@@ -135,7 +146,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
       def apply(ident: Ident, paramSort: Traversable[Sort], sort: Sort) =
         new DeclareFun((ident,paramSort,sort) :: Nil)
 
-      def unapply(decs: Traversable[(Ident, Traversable[Sort], Sort)]) = Some(decs)
+      def unapply(arg: DeclareFun) = Some(arg.decs)
     }
 
     /** Define-fun command. */
@@ -151,14 +162,27 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
       def apply(ident: Ident, params: Traversable[(Ident,Sort)], sort: Sort, expr: Expr) =
         new DefineFun((ident,params,sort,expr) :: Nil)
 
-      def unapply(defs: Traversable[(Ident, Traversable[(Ident, Sort)], Sort, Expr)]) =
-        Some(defs)
+      def unapply(arg: DefineFun) = Some(arg.defs)
     }
 
     /** Push command. */
     case class Push(n: Int) extends ToSmtsMsg
     /** Pop command. */
     case class Pop(n: Int) extends ToSmtsMsg
+
+    /** Check sat command. */
+    object CheckSat extends ToSmtsMsg
+    /** Get model command. */
+    object GetModel extends ToSmtsMsg
+    /** Get value command. */
+    case class GetValue(val exprs: Traversable[Expr]) extends ToSmtsMsg
+    /** Get unsat core command. */
+    object GetUnsatCore extends ToSmtsMsg
+
+    /** Assert command. */
+    case class Assert(
+      val expr: Expr, val label: Option[Ident] = None
+    ) extends ToSmtsMsg
 
 
     /** Extended by all the messages Smts can send. */

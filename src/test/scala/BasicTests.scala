@@ -37,8 +37,7 @@ object BasicTests extends Tester {
   def testParsers = {
     import java.io.{Writer, BufferedWriter}
 
-    def testSmtLibParsers = {
-      title2("Testing smt lib parsers.")
+    def test = {
       verbln("Creating a SmtLib parser with String as Expr.")
       val smtLibParser = new SmtLibParsers[String, String, String] {
         def expr2Smt(s: String, writer: Writer) = ()
@@ -99,14 +98,13 @@ object BasicTests extends Tester {
       title2("Values parser.")
       testParsing("(((this is an expr) (value)) ((another expr) (another value)) ((a last expr) (a last value)))")
       title2("Done testing smt lib parsers.")
-      space
     }
 
-    title1("Testing smts.parsers.")
+    title1("Testing parsers.")
     space
-    testSmtLibParsers
-
-    title1("Done testing smts.parsers.")
+    test
+    space
+    title1("Done testing parsers.")
     space
     space
   }

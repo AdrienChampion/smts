@@ -31,6 +31,14 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
   def printSetOption(w: Writer, option: String) = {
     w write "(set-option " ; w write option ; w write ")\n"
   }
+  def printSetInfo(w: Writer, info: String, value: Option[String]) = {
+    w write "(set-info " ; w write info
+    value match {
+      case Some(s) => { w write " " ; w write s }
+      case None => ()
+    }
+    w write ")\n"
+  }
   def printExit(w: Writer) = w write "(exit)\n"
 
 
@@ -53,7 +61,7 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
   def printDefineFun(w: Writer, defi: (Ident, Traversable[(Ident, Sort)], Sort, Expr)) = {
     w write "(define-fun " ; ident2Smt(defi._1,w) ; w write " ("
     defi._2 foreach (pair => {
-      w write " " ; ident2Smt(pair._1,w) ; w write " " ; sort2Smt(pair._2,w)
+      w write " (" ; ident2Smt(pair._1,w) ; w write " " ; sort2Smt(pair._2,w) ; w write ")"
     })
     w write " ) " ; sort2Smt(defi._3,w) ; w write " " ; expr2Smt(defi._4,w) ; w write ")\n"
   }
@@ -73,7 +81,45 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
 
   // |=====| Other.
 
+  def printAssert(w: Writer, expr: Expr, label: Option[Ident]) = {
+    w write "(assert "
+    label match {
+      case Some(label) => {
+        w write "(!" ; expr2Smt(expr,w) ; w write " :named "
+        ident2Smt(label,w) ; w write ")"
+      }
+      case None => expr2Smt(expr,w)
+    }
+    w write ")"
+  }
   def printPush(w: Writer, n: Int) = { w write "(push " ; w write n.toInt ; w write ")\n" }
   def printPop(w: Writer, n: Int) = { w write "(pop " ; w write n.toInt ; w write ")\n" }
+
+
+  // |=====| Function handling the messages.
+
+  /** Calls the proper print function base on the input message. */
+  def writeMsg(msg: Messages.ToSmtsMsg, w: Writer) = {
+    import Messages._
+    msg match {
+      case DummyMsg(msg) => { w write "Dummy[" ; w write msg ; w write "]\n" }
+      case KillSolver => printExit(w)
+      case SetOption(option) => printSetOption(w, option)
+      case SetInfo(info,value) => printSetInfo(w, info, value)
+      case SetLogic(logic) => printSetLogic(w, logic)
+      case DeclareSort(decs) => decs foreach (dec => printDeclareSort(w, dec))
+      case DefineSort(defs) => defs foreach (defi => printDefineSort(w, defi))
+      case DeclareFun(decs) => decs foreach (dec => printDeclareFun(w, dec))
+      case DefineFun(defs) => defs foreach (defi => printDefineFun(w, defi))
+      case Push(n) => printPush(w, n)
+      case Pop(n) => printPop(w, n)
+      case CheckSat => printCheckSat(w)
+      case GetModel => printGetModel(w)
+      case GetValue(exprs) => printGetValue(w, exprs)
+      case GetUnsatCore => printGetUnsatCore(w)
+      case Assert(expr,label) => printAssert(w,expr,label)
+      case msg => { println("What the fuck: " + msg) ; sys exit 0 }
+    }
+  }
 
 }
