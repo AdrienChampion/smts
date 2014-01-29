@@ -81,6 +81,7 @@ object BasicTests extends Tester {
       title2("Ident parsing.")
       testParsingIdent("^ont50342")
       testParsingIdent("@toto")
+      testParsingIdent("?y2")
       testParsingIdent("_%$^taoe/*@d&.ppo<i-bt+kjob_>mm=m.")
       testParsingIdent("|snta,h.snthilrc[]{+)(*][=&!]+)}{)(*#!@-snzvw;@/eo#q^?57621629%642|")
       title2("Error parser.")

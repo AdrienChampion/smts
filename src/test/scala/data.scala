@@ -39,8 +39,16 @@ object ExprStructure extends RegexParsers with PackratParsers {
 
   /** Hash consign trait for expressions. */
   trait ConsignedExpr[In,Out] {
+    ConsignedExpr.register(this)
     /** A hash consign to control memory consumption. */
     protected val consign = new OpenHashMap[In,Out]
+    def clear = consign.clear
+  }
+  object ConsignedExpr {
+    val registered = new scala.collection.mutable.HashSet[{ def clear: Unit }]
+    def register(o: ConsignedExpr[_,_]) = registered += o
+    def clearAll =
+      registered foreach (cons => cons.clear)
   }
 
   /** Identifier class. */
@@ -50,6 +58,19 @@ object ExprStructure extends RegexParsers with PackratParsers {
   object Ident extends ConsignedExpr[String, Ident] {
     def apply(id: String) = consign.getOrElseUpdate(id, new Ident(id))
     def unapply(arg: Ident) = Some(arg.id)
+  }
+
+  /** Function application. */
+  class FunApp private(val id: Ident, val args: Traversable[Expr]) extends BoolExpr with ArithExpr {
+    def writeTo(w: Writer) = {
+      w write "(" ; id writeTo w
+      args foreach (arg => { w write " " ; arg writeTo w })
+      w write ")"
+    }
+  }
+  object FunApp extends ConsignedExpr[(Ident, Traversable[Expr]),FunApp] {
+    def apply(id: Ident, args: Traversable[Expr]) = consign.getOrElseUpdate((id,args), new FunApp(id,args))
+    def unapply(arg: FunApp) = Some((arg.id,arg.args))
   }
 
   /** Extended by all the Boolean expressions. */
@@ -166,6 +187,46 @@ object ExprStructure extends RegexParsers with PackratParsers {
     def unapply(arg: Le) = Some((arg.lhs, arg.rhs))
   }
 
+  /** Forall class. */
+  class Forall private(val vars: Traversable[(Ident,Sort)], val expr: Expr) extends BoolExpr {
+    def writeTo(w: Writer) = {
+      w write "(forall ("
+      vars foreach (v => { w write " (" ; v._1 writeTo w ; v._2 writeTo w ; w write ")" })
+      w write " ) " ; expr writeTo w ; w write ")"
+    }
+  }
+  object Forall extends ConsignedExpr[(Traversable[(Ident,Sort)],Expr), Forall] {
+    def apply(vars: Traversable[(Ident,Sort)], expr: Expr) = consign.getOrElseUpdate((vars,expr), new Forall(vars,expr))
+    def unapply(arg: Forall) = Some((arg.vars,arg.expr))
+  }
+  /** Exists class. */
+  class Exists private(val vars: Traversable[(Ident,Sort)], val expr: Expr) extends BoolExpr {
+    def writeTo(w: Writer) = {
+      w write "(exists ("
+      vars foreach (v => { w write " (" ; v._1 writeTo w ; v._2 writeTo w ; w write ")" })
+      w write " ) " ; expr writeTo w ; w write ")"
+    }
+  }
+  object Exists extends ConsignedExpr[(Traversable[(Ident,Sort)],Expr), Exists] {
+    def apply(vars: Traversable[(Ident,Sort)], expr: Expr) = consign.getOrElseUpdate((vars,expr), new Exists(vars,expr))
+    def unapply(arg: Exists) = Some((arg.vars,arg.expr))
+  }
+
+  /** Let class. */
+  class Let private(val bindings: Traversable[(Ident,Expr)], val expr: Expr) extends BoolExpr with ArithExpr {
+    def writeTo(w: Writer) = {
+      w write "(let ("
+      bindings foreach (binding => { w write " (" ; binding._1 writeTo w ; binding._2 writeTo w ; w write ")" })
+      w write " ) " ; expr writeTo w ; w write ")"
+    }
+  }
+  object Let extends ConsignedExpr[(Traversable[(Ident,Expr)],Expr), Let] {
+    def apply(bindings: Traversable[(Ident,Expr)], expr: Expr) = consign.getOrElseUpdate(
+      (bindings,expr), new Let(bindings,expr)
+    )
+    def unapply(arg: Let) = Some((arg.bindings,arg.expr))
+  }
+
 
   /** Extended by all the integer nodes. */
   sealed trait ArithExpr extends Expr
@@ -193,7 +254,7 @@ object ExprStructure extends RegexParsers with PackratParsers {
   /** Plus class. */
   class Plus(val lhs: ArithExpr, val rhs: ArithExpr) extends ArithExpr {
     def writeTo(w: Writer) = {
-      w write "(+ " ; w write lhs.toString ; w write " " ; w write rhs.toString ; w write ")"
+      w write "(+ " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
   }
   object Plus extends ConsignedExpr[(ArithExpr,ArithExpr), Plus] {
@@ -204,7 +265,7 @@ object ExprStructure extends RegexParsers with PackratParsers {
   /** Minus class. */
   class Minus(val lhs: ArithExpr, val rhs: ArithExpr) extends ArithExpr {
     def writeTo(w: Writer) = {
-      w write "(- " ; w write lhs.toString ; w write " " ; w write rhs.toString ; w write ")"
+      w write "(- " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
   }
   object Minus extends ConsignedExpr[(ArithExpr,ArithExpr), Minus] {
@@ -215,7 +276,7 @@ object ExprStructure extends RegexParsers with PackratParsers {
   /** Unary minus class. */
   class UMinus(val kid: ArithExpr) extends ArithExpr {
     def writeTo(w: Writer) = {
-      w write "(- " ; w write kid.toString ; w write ")"
+      w write "(- " ; kid writeTo w ; w write ")"
     }
   }
   object UMinus extends ConsignedExpr[ArithExpr, UMinus] {
@@ -261,8 +322,22 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
 
   import ExprStructure._
 
+  def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
+  def ident2Smt(ident: Ident, w: Writer) = ident writeTo w
+  def sort2Smt(sort: Sort, w: Writer) = sort writeTo w
+  lazy val smt2Expr: PackratParser[Expr] = testExprParser
+  lazy val smt2Ident: PackratParser[Ident] = identExprParser
+  lazy val smt2Sort: PackratParser[Sort] = sortParser
+
   // |=====| Parsers.
 
+  lazy val bindingParser: PackratParser[(Ident,Expr)] = {
+    "(" ~> identExprParser ~ exprParser <~ ")" ^^ { case id~expr => (id,expr) } |
+    "(" ~> identExprParser ~ arithParser <~ ")" ^^ { case id~expr => (id,expr) }
+  }
+  lazy val funAppParser: PackratParser[FunApp] = {
+    "(" ~> identExprParser ~ rep((exprParser | arithParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
+  }
   lazy val testExprParser: PackratParser[Expr] = exprParser
   lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
   lazy val exprParser: PackratParser[BoolExpr] = {
@@ -272,11 +347,16 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
     "(" ~ "not" ~> exprParser <~ ")" ^^ { case kid => Not(kid) } |
     "(" ~ "and" ~> rep(exprParser) <~ ")" ^^ { case kids => AndN(kids) } |
     "(" ~ "or" ~> rep(exprParser) <~ ")" ^^ { case kids => OrN(kids) } |
+    "(" ~ "forall" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Forall(vars,e) } |
+    "(" ~ "exists" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Exists(vars,e) } |
+    "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
     "(" ~ "=" ~> rep(exprParser) <~ ")" ^^ { case kids => Eq(kids) } |
-    "(" ~ "<"  ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Lt(lhs,rhs) } |
-    "(" ~ "<=" ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Le(lhs,rhs) } |
-    "(" ~ ">=" ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Ge(lhs,rhs) } |
-    "(" ~ ">"  ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Gt(lhs,rhs) }
+    "(" ~ "=" ~> rep(arithParser) <~ ")" ^^ { case kids => Eq(kids) } |
+    "(" ~ "<"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Lt(lhs,rhs) } |
+    "(" ~ "<=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Le(lhs,rhs) } |
+    "(" ~ ">=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Ge(lhs,rhs) } |
+    "(" ~ ">"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Gt(lhs,rhs) } |
+    funAppParser
   }
 
   lazy val arithParser: PackratParser[ArithExpr] = {
@@ -286,7 +366,9 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
     "(" ~ "+" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Plus(lhs,rhs) } |
     "(" ~ "-" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Minus(lhs,rhs) } |
     "(" ~ "-" ~> arithParser <~ ")" ^^ { case kid => UMinus(kid) } |
-    "(" ~ "*" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Mult(lhs,rhs) }
+    "(" ~ "*" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Mult(lhs,rhs) } |
+    "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
+    funAppParser
   }
 
   lazy val bigIntParser: PackratParser[BigInt] = {
@@ -302,13 +384,6 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
   }
 
 
-  def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
-  def ident2Smt(ident: Ident, w: Writer) = ident writeTo w
-  def sort2Smt(sort: Sort, w: Writer) = sort writeTo w
-  lazy val smt2Expr: PackratParser[Expr] = testExprParser
-  lazy val smt2Ident: PackratParser[Ident] = identExprParser
-  lazy val smt2Sort: PackratParser[Sort] = sortParser
-
   sealed trait ParseResult
   case class Succ(val msg: Messages.ToSmtsMsg)
   case class Fail(val msg: String)
@@ -319,5 +394,7 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
       case Failure(msg,next) => Fail(msg + "\n" + next.pos.longString)
       case Error(msg,next) => Fail(msg + "\n" + next.pos.longString)
     }
+
+  def clearConsigned = ConsignedExpr.clearAll
 
 }
