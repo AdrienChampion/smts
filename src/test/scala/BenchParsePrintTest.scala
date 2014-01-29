@@ -34,31 +34,29 @@ object BenchParsePrintTest extends Tester {
   def goDown(n: Int) = print("\033[" + n + "B")
   def initDisplay() = {
     print("\033[?25l")
-    verbln("") ; verbln("") ; verbln("") ; verbln("") ; verbln("") ; verb("")
+    verbln("") ; verbln("") ; verbln("") ; verbln("") ; verbln("") ; verbln("") ; verb("")
     // Save position.
     savePos()
   }
   def closeDisplay() = { loadPos() ; println("\033[?25h") }
 
   def printBenchNumber(benchs: Int, total: Int) = {
-    loadPos() ; goUp(5) ; print(benchs.toString + " files benchmarked so far out of " + total + ".")
+    loadPos() ; goUp(6) ; print(benchs.toString + " files benchmarked so far out of " + total + ".")
   }
   def printGeneralStatus(success: Int, different: Int, failed: Int, total: Int) = {
-    loadPos() ; goUp(4)
+    loadPos() ; goUp(5)
     print("Success: " + success + ", different: " + different + ", failed: " + failed + ". Total: " + total + ".")
   }
-  val printGlobalProgress = new Animation(3)
+  val printGlobalProgress = new Animation(4)
   def printBenchName(file: String) = {
-    loadPos() ; goUp(2) ; clearLine()
+    loadPos() ; goUp(3) ; clearLine()
     print("Currently running on file \"" + file + "\".")
   }
   def printFileStatus(success: Int, different: Int, failed: Int, total: Int) = {
-    loadPos() ; goUp(1) ; clearLine()
-    printFileProgress()
+    loadPos() ; goUp(2) ; clearLine()
     print(" Success: " + success + ", different: " + different + ", failed: " + failed + ". Total: " + total + ". ")
-    printFileProgress()
   }
-  val printFileProgress = new Animation(0,"|" :: "/" :: "-" :: "\\" :: Nil, "X",1)
+  val printFileProgress = new Animation(1) // new Animation(0,"|" :: "/" :: "-" :: "\\" :: Nil, "X",1)
 
   class Animation(
     val pos: Int, protected var sprites: List[String] =
@@ -109,10 +107,6 @@ object BenchParsePrintTest extends Tester {
   logln
   logln
 
-  def countSmtFiles(path: String) = {
-    
-  }
-
   BenchStats.totalFileCount = (args.foldLeft(0)(
     (n,arg) => n + (Seq("bash","-c", "find " + arg + " -iname \"*.smt2\" | wc -l") !!).replaceAll("\\s+","").toInt
   ))
@@ -147,7 +141,7 @@ object BenchParsePrintTest extends Tester {
     @tailrec
     def loop(line: String = "", success: Int = 0, different: Int = 0, failed: Int = 0, lines: Int = 0): (Int,Int,Int) = {
       printFileStatus(success, different, failed, success + different + failed)
-      BenchStats.updateGlobalStatus
+      printFileProgress({ max => max * lines / lineCount })
       val nuLine = br.readLine
       if (nuLine != null) {
         val cleanLine = if (line == "") nuLine.trim else line + " " + nuLine.trim
