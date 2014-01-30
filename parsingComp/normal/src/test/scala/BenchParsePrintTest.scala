@@ -210,6 +210,7 @@ object BenchParsePrintTest extends Tester {
 
   object BenchStats {
     def updateGlobalStatus = {
+      printBenchNumber(fileCount, totalFileCount)
       printGlobalProgress({ max => max * fileCount / totalFileCount })
       printGeneralStatus(success,different,failed,total)
     }
@@ -217,14 +218,12 @@ object BenchParsePrintTest extends Tester {
     def fileCount = _fileCount
     def fileCountIncrement = {
       _fileCount += 1
-      printBenchNumber(fileCount, totalFileCount)
       updateGlobalStatus
     }
     private var _totalFileCount: Int = 0
     def totalFileCount = _totalFileCount
     def totalFileCount_= (n: Int) = {
       _totalFileCount = n
-      printBenchNumber(fileCount, _totalFileCount)
       updateGlobalStatus
     }
     def update(s: Int, d: Int, f: Int) = {

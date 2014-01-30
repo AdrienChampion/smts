@@ -21,12 +21,12 @@ package smts.test
 import java.io.Writer
 
 import scala.collection.mutable.OpenHashMap
-import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
+import scala.util.parsing.combinator.RegexParsers
 
 import smts._
 
 /** Contains a simple data structures with printers and parsers for testing Smts. */
-object ExprStructure extends RegexParsers with PackratParsers {
+object ExprStructure extends RegexParsers {
 
 
   // |=====| Expression structure.
@@ -329,29 +329,28 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
   def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
   def ident2Smt(ident: Ident, w: Writer) = ident writeTo w
   def sort2Smt(sort: Sort, w: Writer) = sort writeTo w
-  lazy val smt2Expr: PackratParser[Expr] = testExprParser
-  lazy val smt2Ident: PackratParser[Ident] = identExprParser
-  lazy val smt2Sort: PackratParser[Sort] = sortParser
+  lazy val smt2Expr: Parser[Expr] = testExprParser
+  lazy val smt2Ident: Parser[Ident] = identExprParser
+  lazy val smt2Sort: Parser[Sort] = sortParser
 
   // |=====| Parsers.
 
-  lazy val bindingParser: PackratParser[(Ident,Expr)] = {
+  lazy val bindingParser: Parser[(Ident,Expr)] = {
     "(" ~> identExprParser ~ exprParser <~ ")" ^^ { case id~expr => (id,expr) } |
     "(" ~> identExprParser ~ arithParser <~ ")" ^^ { case id~expr => (id,expr) }
   }
-  lazy val funAppParser: PackratParser[FunApp] = {
+  lazy val funAppParser: Parser[FunApp] = {
     "(" ~> identExprParser ~ rep((exprParser | arithParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
   }
-  lazy val testExprParser: PackratParser[Expr] = exprParser
-  lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
+  lazy val testExprParser: Parser[Expr] = exprParser
+  lazy val identExprParser: Parser[Ident] = identParser ^^ { case id => Ident(id) }
   lazy val realParserAsPair: Parser[(String,String)] = {
     intParser ~ "." ~ intParser ^^ { case int~_~dec => (int,dec) } |
     intParser <~ "." ^^ { case int => (int,"") } |
     "." ~> intParser ^^ { case dec => ("0",dec) }
   }
 
-
-  lazy val exprParser: PackratParser[BoolExpr] = {
+  lazy val exprParser: Parser[BoolExpr] = {
     "true" ^^ { case _ => True } |
     "false" ^^ { case _ => False } |
     "(" ~ "not" ~> exprParser <~ ")" ^^ { case kid => Not(kid) } |
@@ -370,7 +369,7 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
     identExprParser
   }
 
-  lazy val arithParser: PackratParser[ArithExpr] = {
+  lazy val arithParser: Parser[ArithExpr] = {
     realParserAsPair ^^ { case pair => RatConst.fromDec(pair._1,pair._2) }
     bigIntParser ^^ { case value => IntConst(value) } |
     "(" ~ "/" ~> bigIntParser ~ bigIntParser <~ ")" ^^ { case num~den => RatConst(num,den) } |
@@ -383,12 +382,12 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
     identParser ^^ { case id => Ident(id) }
   }
 
-  lazy val bigIntParser: PackratParser[BigInt] = {
+  lazy val bigIntParser: Parser[BigInt] = {
     """[1-9][0-9]*""".r ^^ { case num => BigInt(num) } |
     "0" ^^ { case _ => BigInt("0") }
   }
 
-  lazy val sortParser: PackratParser[Sort] = {
+  lazy val sortParser: Parser[Sort] = {
     identParser ^^ { case id => IdentSort(id) } |
     "(" ~> identParser ~ rep1(sortParser) <~ ")" ^^ {
       case id~sorts => NestedSort(id,sorts)
@@ -401,7 +400,7 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
   case class Fail(val msg: String)
 
   def parseCommand(s: String) =
-    phrase(commandParser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))) match {
+    parse(commandParser,s) match {
       case Success(result,next) => Succ(result)
       case Failure(msg,next) => Fail(msg + "\n" + next.pos.longString)
       case Error(msg,next) => Fail(msg + "\n" + next.pos.longString)
