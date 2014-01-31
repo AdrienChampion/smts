@@ -18,13 +18,12 @@
 
 package smts
 
-import java.io.Writer
-
 /** Contains the logics and sorts used in Smts. */
 package object logics {
 
   /** Extended by all the logics. */
   trait Logic {
+    import java.io.Writer
     /** The string representation of the logic. */
     def asString: String
     /** Prints the logic in the '''Writer'''. */
@@ -93,6 +92,7 @@ package object sorts {
 
   /** Inherited by all the sorts. */
   trait Sort {
+    import java.io.Writer
     /** The string representation of the sort */
     val asString: String
     /** Prints the sort in the '''Writer'''. */

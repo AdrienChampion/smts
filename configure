@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\
+#  This file is part of Smts.                                               *
+#                                                                           *
+#  Smts is free software: you can redistribute it and/or modify             *
+#  it under the terms of the GNU Lesser General Public License as           *
+#  published by the Free Software Foundation, either version 3 of the       *
+#  License, or (at your option) any later version.                          *
+#                                                                           *
+#  Smts is distributed in the hope that it will be useful,                  *
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of           *
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            *
+#  GNU Lesser General Public License for more details.                      *
+#                                                                           *
+#  You should have received a copy of the GNU Lesser General Public         *
+#  License along with Smts.                                                 *
+#  If not, see <http://www.gnu.org/licenses/>.                              *
+# * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+sbtCommand="sbt"
+sbtOption="--sbt="
+declare -a helpOptions=("--help" "-h")
+make="Makefile"
+smtsVersion="0"
+
+function explainOptions {
+  echo "Options:"
+  echo "  $sbtOption: command used to launch sbt (default $sbtCommand),"
+  echo "  ${helpOptions[0]}, ${helpOptions[1]}: displays this message."
+}
+
+function handleOptions {
+  for option in "$@"
+  do
+    if [[ "$option" == $sbtOption* ]]
+    then
+      sbtCommand=`echo "$option" | awk -F = '{ print $2 }'`
+      echo "Sbt command set to \"$sbtCommand\" by user."
+    elif [[ "$option" == "${helpOptions[0]}" || "$option" == "${helpOptions[1]}" ]]
+    then
+      explainOptions
+      exit 0
+    else
+      echo "$(tput bold)Unknown option \"$option\".$(tput sgr0)"
+      explainOptions
+      exit -1
+    fi
+  done
+}
+
+function getVersion {
+  smtsVersion=`cat build.sbt | grep -e 'version :=' | awk -F \" '{ print $2 }'`
+}
+
+function genMakefile {
+  touch "$make"
+  printMakeErase "all: smts"
+  printMake ""
+  printMake "smts:"
+  printMake "	sbt packageBin"
+  printMake "	mkdir -p smtsLib"
+  printMake "	cp \`find target/ -iname \"smts_*-$smtsVersion.jar\"\` smtsLib/smts.jar"
+  printMake "	echo \"Done, resulting jar is smtsLib/smts.jar\""
+  printMake ""
+  printMake "clean:"
+  printMake "	sbt clean"
+  printMake ""
+}
+
+function printMakeErase {
+  echo "$1" > $make
+}
+function printMake {
+  echo "$1" >> $make
+}
+
+# Doing things.
+handleOptions "$@"
+getVersion
+genMakefile

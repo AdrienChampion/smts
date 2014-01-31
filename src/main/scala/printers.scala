@@ -21,7 +21,7 @@ package smts
 import java.io.Writer
 
 /** This trait contains all the standard SMT lib 2 printers use in Smts. */
-trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
+trait SmtLibPrinters[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
 
   // |=====| Settings.
 
@@ -90,7 +90,7 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
       }
       case None => expr2Smt(expr,w)
     }
-    w write ")"
+    w write ")\n"
   }
   def printPush(w: Writer, n: Int) = { w write "(push " ; w write n.toInt ; w write ")\n" }
   def printPop(w: Writer, n: Int) = { w write "(pop " ; w write n.toInt ; w write ")\n" }
@@ -118,7 +118,7 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
       case GetValue(exprs) => printGetValue(w, exprs)
       case GetUnsatCore => printGetUnsatCore(w)
       case Assert(expr,label) => printAssert(w,expr,label)
-      case msg => { println("What the fuck: " + msg) ; sys exit 0 }
+      case msg => { println("Unexpected message: " + msg) ; sys exit 0 }
     }
   }
 

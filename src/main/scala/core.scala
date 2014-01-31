@@ -27,7 +27,7 @@ import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
   * @tparam Expr The user's type for the data structure.
   * @tparam Ident The user's type for identifiers.
   * @tparam Sort The user's type for sorts. */
-trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
+trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
 
   // |=====| User specified printer and parsers for the expression structure.
@@ -74,11 +74,17 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     /** Extended by all the messages Smts can receive. */
     sealed trait ToSmtsMsg
 
+    /** Extended by all the messages producing a result. */
+    sealed trait QueryMsg
+
     /** Dummy message for testing purposes. */
     case class DummyMsg(msg: String) extends ToSmtsMsg
 
     /** Kills the underlying solver process. */
     object KillSolver extends ToSmtsMsg
+
+    /** Restarts the underlying solver process. */
+    object Restart extends ToSmtsMsg
 
     /** Set-option command. */
     case class SetOption(option: String) extends ToSmtsMsg
@@ -92,11 +98,12 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     class SetLogic private(val logic: logics.Logic) extends ToSmtsMsg
     /** Companion object for '''SetLogic'''. */
     object SetLogic {
-
+      /** Creates a '''SetLogic" message.
+        * @param logic A string representing the logic, make sure it is legal. */
       def apply(logic: String) = new SetLogic(new logics.Logic { val asString = logic })
-
+      /** Creates a '''SetLogic" message.
+        * @param logic One of the logics provided by Smts. */
       def apply(logic: logics.Logic) = new SetLogic(logic)
-
       def unapply(arg: SetLogic) = Some(arg.logic)
     }
 
@@ -106,13 +113,9 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     ) extends ToSmtsMsg
     /** Companion object for '''DeclareSort'''. */
     object DeclareSort {
-
       def apply(decs: Traversable[(Ident, Int)]) = new DeclareSort(decs)
-
       def apply(dec: (Ident, Int)) = new DeclareSort(dec :: Nil)
-
       def apply(id: Ident, arity: Int) = new DeclareSort((id,arity) :: Nil)
-
       def unapply(arg: DeclareSort) = Some(arg.decs)
     }
 
@@ -122,13 +125,9 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     ) extends ToSmtsMsg
     /** Companion object for '''DefineSort'''. */
     object DefineSort {
-
       def apply(defs: Traversable[(Sort, Traversable[Ident], Sort)]) = new DefineSort(defs)
-
       def apply(defi: (Sort, Traversable[Ident], Sort)) = new DefineSort(defi :: Nil)
-
       def apply(name: Sort, ids: Traversable[Ident], sort: Sort) = new DefineSort((name,ids,sort) :: Nil)
-
       def unapply(arg: DefineSort) = Some(arg.defs)
     }
 
@@ -138,14 +137,10 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     ) extends ToSmtsMsg
     /** Companion object for '''DeclareFun'''. */
     object DeclareFun {
-
       def apply(decs: Traversable[(Ident, Traversable[Sort], Sort)]) = new DeclareFun(decs)
-
       def apply(dec: (Ident, Traversable[Sort], Sort)) = new DeclareFun(dec :: Nil)
-
       def apply(ident: Ident, paramSort: Traversable[Sort], sort: Sort) =
         new DeclareFun((ident,paramSort,sort) :: Nil)
-
       def unapply(arg: DeclareFun) = Some(arg.decs)
     }
 
@@ -155,13 +150,10 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     ) extends ToSmtsMsg
     /** Companion object for '''DefineFun'''. */
     object DefineFun {
-
       def apply(defs: Traversable[(Ident, Traversable[(Ident,Sort)], Sort, Expr)]) =
         new DefineFun(defs)
-
       def apply(ident: Ident, params: Traversable[(Ident,Sort)], sort: Sort, expr: Expr) =
         new DefineFun((ident,params,sort,expr) :: Nil)
-
       def unapply(arg: DefineFun) = Some(arg.defs)
     }
 
@@ -170,14 +162,17 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     /** Pop command. */
     case class Pop(n: Int) extends ToSmtsMsg
 
+
+    // |=====| Queries.
+
     /** Check sat command. */
-    object CheckSat extends ToSmtsMsg
+    object CheckSat extends ToSmtsMsg with QueryMsg
     /** Get model command. */
-    object GetModel extends ToSmtsMsg
+    object GetModel extends ToSmtsMsg with QueryMsg
     /** Get value command. */
-    case class GetValue(val exprs: Traversable[Expr]) extends ToSmtsMsg
+    case class GetValue(val exprs: Traversable[Expr]) extends ToSmtsMsg with QueryMsg
     /** Get unsat core command. */
-    object GetUnsatCore extends ToSmtsMsg
+    object GetUnsatCore extends ToSmtsMsg with QueryMsg
 
     /** Assert command. */
     case class Assert(
@@ -186,7 +181,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
 
     /** Extended by all the messages Smts can send. */
-    sealed trait FromSmtsMsg
+    sealed trait FromSmtsMsg extends SmtsMsg
 
     /** Sat result. */
     case object Sat extends FromSmtsMsg { override def toString() = "Sat" }
@@ -215,9 +210,16 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
     /** Error result.
       * @param msg The text of the error. */
-    case class SolverError(val msg: String) extends FromSmtsMsg {
-      override def toString() = "Solver error: {" + msg + "}"
+    case class SolverError(val msgs: Traversable[String]) extends FromSmtsMsg {
+      override def toString() = "Solver error: {" + msgs + "}"
     }
+
+
+    /** Extended by all messages exchanged internally. */
+    sealed trait InternalMsg extends SmtsMsg
+
+    /** Success message. */
+    object Success extends InternalMsg
   }
 
 }

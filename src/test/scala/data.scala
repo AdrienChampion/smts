@@ -20,13 +20,13 @@ package smts.test
 
 import java.io.Writer
 
+import scala.language.reflectiveCalls
 import scala.collection.mutable.OpenHashMap
-import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
 
 import smts._
 
 /** Contains a simple data structures with printers and parsers for testing Smts. */
-object ExprStructure extends RegexParsers with PackratParsers {
+object ExprStructure {
 
 
   // |=====| Expression structure.
@@ -322,7 +322,9 @@ object ExprStructure extends RegexParsers with PackratParsers {
 
 }
 
-object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort] with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort] {
+trait SmtsTest
+extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
+with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort] {
 
   import ExprStructure._
 
@@ -344,7 +346,7 @@ object Smts extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident
   }
   lazy val testExprParser: PackratParser[Expr] = exprParser
   lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
-  lazy val realParserAsPair: Parser[(String,String)] = {
+  lazy val realParserAsPair: PackratParser[(String,String)] = {
     intParser ~ "." ~ intParser ^^ { case int~_~dec => (int,dec) } |
     intParser <~ "." ^^ { case int => (int,"") } |
     "." ~> intParser ^^ { case dec => ("0",dec) }

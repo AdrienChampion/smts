@@ -18,10 +18,12 @@
 
 package smts.test
 
+import scala.language.reflectiveCalls
+
 import smts._
 
 /** Tests basic functionalities of the Smts SMT solver wrapper. */
-object BasicTests extends Tester {
+object BasicTests extends Verboser {
 
   space
   title0("Launching BasicTests.")

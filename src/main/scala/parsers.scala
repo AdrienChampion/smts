@@ -19,7 +19,7 @@
 package smts
 
 /** This trait contains all the standard SMT lib 2 parsers used in Smts. */
-trait SmtLibParsers[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
+trait SmtLibParsers[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
 
   import Messages._
 
@@ -30,12 +30,6 @@ trait SmtLibParsers[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
     } |
     """[\|][^\\\|]*[\|]""".r ^^ { case id => id }
   }
-
-  /** Parses an error. */
-  lazy val errorParser: PackratParser[SolverError] =
-    "(" ~ "error" ~ "\"" ~> """[^\"]*""".r <~ "\"" ~ ")" ^^ {
-      case msg => SolverError(msg)
-    }
 
   /** Function parameter parser. */
   lazy val paramParser: PackratParser[(Ident,Sort)] =
@@ -77,6 +71,13 @@ trait SmtLibParsers[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
     "unknown" ^^ { case _ => Unknown }
   }
 
+  /** Parses an error. */
+  lazy val errorParser: PackratParser[SolverError] =
+    "(" ~ "error" ~ "\"" ~> """[^\"]*""".r <~ "\"" ~ ")" ^^ {
+      case msg => SolverError("The solver output an error:" :: msg :: Nil)
+    }
+  /** Parses the string "success". */
+  lazy val successParser: PackratParser[InternalMsg] = "success" ^^ { case _ => Messages.Success }
   /** Parser used for check-sat results. */
   lazy val checkSatParser: PackratParser[FromSmtsMsg] = { satParser | errorParser }
   /** Parser used for get-model results. */
@@ -86,9 +87,17 @@ trait SmtLibParsers[Expr, Ident, Sort] extends SmtsCore[Expr, Ident, Sort] {
   /** Parser used for get-unsat-core results. */
   lazy val getUnsatCoreParser: PackratParser[FromSmtsMsg] = { unsatCoreParser | errorParser }
 
+  protected def getParser(msg: ToSmtsMsg): PackratParser[SmtsMsg] = msg match {
+    case CheckSat => checkSatParser
+    case GetModel => getModelParser
+    case GetValue(exprs) => getValueParser
+    case GetUnsatCore => getUnsatCoreParser
+    case _ => successParser
+  }
+
 
   /** Parser for any result, used for testing. */
-  lazy val resultParser: PackratParser[FromSmtsMsg] = { errorParser | satParser | modelParser | unsatCoreParser | valuesParser }
+  lazy val resultParser: PackratParser[SmtsMsg] = { errorParser | satParser | modelParser | unsatCoreParser | valuesParser }
 
 }
 

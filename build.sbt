@@ -25,9 +25,9 @@ scalaVersion := "2.10.3"
 javaOptions ++= Seq("-Xmx1024M","-Xms512M")
 
 // append -deprecation to the options passed to the Scala compiler
-scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked",
-                      "-language:postfixOps",
-                      "-optimise", "-encoding", "utf8")
+// scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked",
+//                       "-language:postfixOps",
+//                       "-optimise", "-encoding", "utf8")
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
  

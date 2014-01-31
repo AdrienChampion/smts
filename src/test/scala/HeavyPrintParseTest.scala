@@ -24,7 +24,35 @@ import sys.process.stringSeqToProcess
 import scala.annotation.tailrec
 
 /** Tests basic functionalities of the Smts SMT solver wrapper. */
-object BenchParsePrintTest extends Tester {
+object HeavyPrintParseTest extends Verboser with OptionHandler with Animator {
+
+  val optionPrint = { s: String => verbln(s) }
+  val animatorPrint = { s: String => verb(s) }
+
+  object Smts extends SmtsTest
+
+  object Options {
+    val logDefault = "./benchParsePrintTest.log"
+    private var _logFile: String = logDefault
+    def logFile = _logFile
+    def logFile_= (newLogFile: String) = _logFile = newLogFile
+    private var _dirs: List[String] = Nil
+    def dirs = _dirs
+    def dirs_= (newDirs: Traversable[String]) = _dirs = newDirs.toList
+  }
+
+  val myOptions = {
+    ("-h", { s: String => { printHelp() ; sys exit -1 } }, "     prints this message." :: Nil) ::
+    ("--help", { s: String => { printHelp() ; sys exit -1 } }, " also prints this message." :: Nil) ::
+    ("--log=", { s: String => Options.logFile = optionValue(s) },
+      "<file> This file will be used for logging, (default \"" + Options.logDefault + "\")." :: Nil) ::
+    Nil
+  }
+
+  val myArguments = {
+    ("--dir=", { s: String => { Options.dirs = optionValue(s).split(",") } }, "<dir1>,<dir2>,... The directories where the benchmarks are." :: Nil) ::
+    Nil
+  }
 
   object Timer {
     private var _timer: Long = 0
@@ -34,80 +62,49 @@ object BenchParsePrintTest extends Tester {
     def stop = _timer = System.currentTimeMillis - _timer
   }
 
-  /** Six lines printer. */
-  def savePos() = print("\033[s")
-  def loadPos() = print("\033[u")
-  def clearLine() = print("\033[K")
-  def goUp(n: Int) = print("\033[" + n + "A")
-  def goDown(n: Int) = print("\033[" + n + "B")
-  def initDisplay() = {
-    print("\033[?25l")
-    verbln("") ; verbln("") ; verbln("") ; verbln("") ; verbln("") ; verbln("") ; verb("")
-    // Save position.
-    savePos()
-  }
-  def closeDisplay() = { loadPos() ; println("\033[?25h") }
+  val animatorLineCount = 6
 
-  def printBenchNumber(benchs: Int, total: Int) = {
-    loadPos() ; goUp(6) ; clearLine()
-    print(benchs.toString + "/" + total + " files benchmarked so far (" + Timer.now + "ms).")
-  }
-  def printGeneralStatus(success: Int, different: Int, failed: Int, total: Int) = {
-    loadPos() ; goUp(5)
-    print("Success: " + success + ", different: " + different + ", failed: " + failed + ". Total: " + total + ".")
-  }
-  val printGlobalProgress = new Animation(4)
-  def printBenchName(file: String) = {
-    loadPos() ; goUp(3) ; clearLine()
-    print("Currently running on file \"" + file + "\".")
-  }
-  def printFileStatus(success: Int, different: Int, failed: Int, total: Int) = {
-    loadPos() ; goUp(2) ; clearLine()
-    print(" Success: " + success + ", different: " + different + ", failed: " + failed + ". Total: " + total + ". ")
-  }
-  val printFileProgress = new Animation(1) // new Animation(0,"|" :: "/" :: "-" :: "\\" :: Nil, "X",1)
+  // Line 1.
+  def printBenchNumber(benchs: Int, total: Int) = printLine(1, {
+    benchs.toString :: "/" :: total.toString :: " files benchmarked so far (" ::
+    Timer.now.toString :: "ms)." :: Nil
+  })
 
-  class Animation(
-    val pos: Int, protected var sprites: List[String] =
-      "\033[34m\\(\033[0m\033[31m^_^\033[0m\033[34m)/\033[0m" ::
-      "\033[34m-(\033[0m\033[31m^_^\033[0m\033[34m)-\033[0m" ::
-      "\033[34m/(\033[0m\033[31m^_^\033[0m\033[34m)\\\033[0m" ::
-      "\033[34m|(\033[0m\033[31m^_^\033[0m\033[34m)|\033[0m" :: Nil,
-    val lastSprite: String = "\033[1;34m\\(\033[1;31m*o*\33[1;34m)/\033[0m",
-    val spriteSize: Int = 7
-  ){
-    val length = 100
-    def maxPos = length - spriteSize
-    private var previous = -10
-    def apply(spritePos: Int => Int) = {
-      val nuPos = spritePos(maxPos)
-      if (nuPos != previous) {
-        previous = nuPos
-        loadPos() ; goUp(pos) ; clearLine ; print("[") ; print("=" * nuPos)
-        if (nuPos == maxPos) print(lastSprite) else sprites match {
-          case head :: tail => { print(head) ; sprites = tail :+ head }
-          case Nil => throw new Exception("Display: error, no sprite to display.")
-        }
-        print(" " * (length - (nuPos + spriteSize))) ; print("]")
-      }
-    }
-    def apply() = {
-      sprites match {
-        case head :: tail => { print(head) ; sprites = tail :+ head }
-        case Nil => throw new Exception("Display: error, no sprite to display.")
-      }
-    } 
-  }
+  // Line 2.
+  def printGeneralStatus(success: Int, different: Int, failed: Int, total: Int) = printLine(2, {
+    "Success: " :: success.toString :: ", different: " :: different.toString ::
+    ", failed: " :: failed.toString :: ". Total: " :: failed.toString :: "." :: Nil
+  })
 
-  val logFile = "./benchParsePrintTest.log"
-  val br = new BufferedWriter(new FileWriter(logFile))
+  // Line 3.
+  val globalProgressAnim = new KawaiiAnimation()
+  def printGlobalProgress(current: Int, max: Int) = animLine(3,current,max,globalProgressAnim)
+
+  // Line 4.
+  def printBenchName(file: String) = printLine(4, {
+    "Currently running on file \"" :: file :: "\"." :: Nil
+  })
+
+  // Line 5.
+  def printFileStatus(success: Int, different: Int, failed: Int, total: Int) = printLine(5, {
+    " Success: " :: success.toString :: ", different: " :: different.toString ::
+    ", failed: " :: failed.toString :: ". Total: " :: total.toString :: ". " :: Nil
+  })
+
+  // Line 6.
+  val fileProgressAnim = new KawaiiAnimation()
+  def printFileProgress(current: Int, max: Int) = animLine(6,current,max,fileProgressAnim)
+
+  setOptions()
+
+  val br = new BufferedWriter(new FileWriter(Options.logFile))
   def log(s: String) = br write s
   def logln(s: String) = { br write s ; br write "\n" }
   def logln() = br write "\n"
   def flush = br.flush
 
-  BenchStats.totalFileCount = (args.foldLeft(0)(
-    (n,arg) => n + (Seq("bash","-c", "find " + arg + " -iname \"*.smt2\" | wc -l") !!).replaceAll("\\s+","").toInt
+  BenchStats.totalFileCount = (Options.dirs.foldLeft(0)(
+    (n,dir) => n + (Seq("bash","-c", "find " + dir + " -iname \"*.smt2\" | wc -l") !!).replaceAll("\\s+","").toInt
   ))
 
   if (BenchStats.totalFileCount == 0) {
@@ -119,21 +116,22 @@ object BenchParsePrintTest extends Tester {
 
   space
   title0("Launching parsing and printing benchmarks.")
-  verbln("Logging in file " + logFile + ".")
+  verbln("Logging in file " + Options.logFile + ".")
   space
-  initDisplay
+  initAnim()
 
-  logln("Benchmarking, arguments: " + args.toList)
+  logln("Parsing and printing benchmarks.")
+  logln("  arguments: " + args.toList)
   logln
   logln
 
   Timer.start
-  args foreach (arg => {
+  Options.dirs foreach (arg => {
     exploreAndDo(arg,workOnBench)
   })
   Timer.stop
 
-  closeDisplay
+  outitAnim()
   logln
   logln("Done in " + Timer.time + "ms.")
   logln("Success:   " + BenchStats.success)
@@ -159,7 +157,7 @@ object BenchParsePrintTest extends Tester {
     @tailrec
     def loop(line: String = "", success: Int = 0, different: Int = 0, failed: Int = 0, lines: Int = 0): (Int,Int,Int) = {
       printFileStatus(success, different, failed, success + different + failed)
-      printFileProgress({ max => max * lines / lineCount })
+      printFileProgress(lines,lineCount)
       val nuLine = br.readLine
       if (nuLine != null) {
         val cleanLine = if (line == "") nuLine.trim else line + " " + nuLine.trim
@@ -203,29 +201,24 @@ object BenchParsePrintTest extends Tester {
     logln("Total:     " + sum)
     logln
     BenchStats.fileCountIncrement
-    // if (result._1 == sum) verbln("Done, all successful (" + result._1 + ").")
-    // else verbln("Done, total: " + sum + ". Success: " + result._1 + ", different: " + result._2 + ", failed: " + result._3 + ".")
-    // verbln("")
   }
 
   object BenchStats {
     def updateGlobalStatus = {
-      printGlobalProgress({ max => max * fileCount / totalFileCount })
+      printGlobalProgress(fileCount,totalFileCount)
       printGeneralStatus(success,different,failed,total)
+      printBenchNumber(fileCount, totalFileCount)
     }
     private var _fileCount: Int = 0
     def fileCount = _fileCount
     def fileCountIncrement = {
       _fileCount += 1
-      printBenchNumber(fileCount, totalFileCount)
       updateGlobalStatus
     }
     private var _totalFileCount: Int = 0
     def totalFileCount = _totalFileCount
     def totalFileCount_= (n: Int) = {
       _totalFileCount = n
-      printBenchNumber(fileCount, _totalFileCount)
-      updateGlobalStatus
     }
     def update(s: Int, d: Int, f: Int) = {
       _success += s ; _different += d ; _failed += f
