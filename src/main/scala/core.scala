@@ -190,6 +190,9 @@ trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     /** Unknown result. */
     case object Unknown extends FromSmtsMsg { override def toString() = "Unknown" }
 
+    /** Time out. */
+    case object Timeout extends FromSmtsMsg { override def toString() = "Timeout" }
+
     /** Get-model result.
       * @param model The model asked by a previous get-model message. */
     case class Model(val model: Traversable[Binding]) extends FromSmtsMsg {

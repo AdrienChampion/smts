@@ -105,7 +105,7 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
       case DummyMsg(msg) => { w write "Dummy[" ; w write msg ; w write "]\n" }
       case KillSolver => printExit(w)
       case SetOption(option) => printSetOption(w, option)
-      case SetInfo(info,value) => { println("printing a setinfo") ; printSetInfo(w, info, value) }
+      case SetInfo(info,value) => printSetInfo(w, info, value)
       case SetLogic(logic) => printSetLogic(w, logic)
       case DeclareSort(decs) => decs foreach (dec => printDeclareSort(w, dec))
       case DefineSort(defs) => defs foreach (defi => printDefineSort(w, defi))
@@ -118,7 +118,7 @@ trait SmtLibPrinters[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
       case GetValue(exprs) => printGetValue(w, exprs)
       case GetUnsatCore => printGetUnsatCore(w)
       case Assert(expr,label) => printAssert(w,expr,label)
-      case msg => { println("Unexpected message: " + msg) ; sys exit 0 }
+      case msg => throw new Exception("Unexpected message: " + msg)
     }
     w.flush
   }

@@ -36,10 +36,7 @@ trait SmtsWriter[Expr,Ident,Sort] extends SmtLibPrinters[Expr,Ident,Sort] {
 
   /** Writes the command the message corresponds to. */
   protected def handleMsg(msg: ToSmtsMsg): Unit = {
-    println("writing message " + msg)
-    writeMsg(msg,solverWriter)
-    println("logging message")
-    logMsg(msg)
+    writeMsg(msg,solverWriter) ; logMsg(msg)
   }
 }
 
@@ -94,12 +91,9 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
 
   /** Reads on the solver reader and parses it. */
   protected def readMsg(msg: ToSmtsMsg) = {
-    println("attempting to read a line")
-    println("msg: " + msg)
     val line = {
       var temp = solverReader.readLine
-      println("temp: " + temp)
-      while (temp == "") { temp = solverReader.readLine ; println("temp: " + temp) }
+      while (temp == "") temp = solverReader.readLine
       temp
     }
 
@@ -110,10 +104,9 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
     def loop(
       text: String = line, parentheses: Int = getParenthesisCount(line)
     ): String = parentheses match {
-      case _ if (text startsWith "(error") => { println("error") ; text }
-      case 0 => { println("line is sane") ; text }
+      case _ if (text startsWith "(error") => text
+      case 0 => text
       case n if n >= 0 => {
-        println("line is not sane")
         val newLine = solverReader.readLine
         logResultLine(newLine)
         loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
@@ -122,7 +115,6 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
     }
 
     try {
-      println("Getting lines.")
       val (text,parser) = (loop(),getParser(msg))
       phrase(parser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))) match {
         case Success(smtsMsg,_) => notifyMaster(smtsMsg)

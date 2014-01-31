@@ -353,15 +353,16 @@ with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
     "(" ~> identExprParser ~ arithParser <~ ")" ^^ { case id~expr => (id,expr) }
   }
   lazy val funAppParser: PackratParser[FunApp] = {
-    "(" ~> identExprParser ~ rep((exprParser | arithParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
+    "(" ~> identExprParser ~ rep((anythingParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
   }
   lazy val testExprParser: PackratParser[Expr] = exprParser
   lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
   lazy val realParserAsPair: PackratParser[(String,String)] = {
-    intParser ~ "." ~ intParser ^^ { case int~_~dec => (int,dec) } |
+    intParser ~ "." ~ intParser ^^ { case int~_~dec => (int + dec, "1" + ("0" * dec.length)) } |
     intParser <~ "." ^^ { case int => (int,"") } |
-    "." ~> intParser ^^ { case dec => ("0",dec) }
+    "." ~> intParser ^^ { case dec => (dec,"1" + ("0" * dec.length)) }
   }
+  lazy val anythingParser: PackratParser[Expr] = { arithParser | exprParser }
 
 
   lazy val exprParser: PackratParser[BoolExpr] = {
@@ -380,12 +381,11 @@ with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
     "(" ~ "<=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Le(lhs,rhs) } |
     "(" ~ ">=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Ge(lhs,rhs) } |
     "(" ~ ">"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Gt(lhs,rhs) } |
-    funAppParser |
-    identExprParser
+    funAppParser | identExprParser
   }
 
   lazy val arithParser: PackratParser[ArithExpr] = {
-    realParserAsPair ^^ { case pair => RatConst.fromDec(pair._1,pair._2) }
+    realParserAsPair ^^ { case pair => RatConst.fromDec(pair._1,pair._2) } |
     bigIntParser ^^ { case value => IntConst(value) } |
     "(" ~ "/" ~> bigIntParser ~ bigIntParser <~ ")" ^^ { case num~den => RatConst(num,den) } |
     "(" ~ "+" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Plus(lhs,rhs) } |
@@ -393,8 +393,7 @@ with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
     "(" ~ "-" ~> arithParser <~ ")" ^^ { case kid => UMinus(kid) } |
     "(" ~ "*" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Mult(lhs,rhs) } |
     "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
-    funAppParser |
-    identParser ^^ { case id => Ident(id) }
+    funAppParser | identExprParser
   }
 
   lazy val bigIntParser: PackratParser[BigInt] = {

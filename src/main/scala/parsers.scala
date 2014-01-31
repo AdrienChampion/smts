@@ -71,6 +71,9 @@ trait SmtLibParsers[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
     "unknown" ^^ { case _ => Unknown }
   }
 
+  /** Parses a timeout. */
+  lazy val timeoutParser: PackratParser[FromSmtsMsg] = "timeout" ^^{ _ => Timeout }
+
   /** Parses an error. */
   lazy val errorParser: PackratParser[SolverError] =
     "(" ~ "error" ~ "\"" ~> """[^\"]*""".r <~ "\"" ~ ")" ^^ {
@@ -79,13 +82,13 @@ trait SmtLibParsers[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
   /** Parses the string "success". */
   lazy val successParser: PackratParser[InternalMsg] = "success" ^^ { case _ => Messages.Success }
   /** Parser used for check-sat results. */
-  lazy val checkSatParser: PackratParser[FromSmtsMsg] = { satParser | errorParser }
+  lazy val checkSatParser: PackratParser[FromSmtsMsg] = { satParser | errorParser | timeoutParser }
   /** Parser used for get-model results. */
-  lazy val getModelParser: PackratParser[FromSmtsMsg] = { modelParser | errorParser }
+  lazy val getModelParser: PackratParser[FromSmtsMsg] = { modelParser | errorParser | timeoutParser }
   /** Parser used for get-value results. */
-  lazy val getValueParser: PackratParser[FromSmtsMsg] = { valuesParser | errorParser }
+  lazy val getValueParser: PackratParser[FromSmtsMsg] = { valuesParser | errorParser | timeoutParser }
   /** Parser used for get-unsat-core results. */
-  lazy val getUnsatCoreParser: PackratParser[FromSmtsMsg] = { unsatCoreParser | errorParser }
+  lazy val getUnsatCoreParser: PackratParser[FromSmtsMsg] = { unsatCoreParser | errorParser | timeoutParser }
 
   protected def getParser(msg: ToSmtsMsg): PackratParser[SmtsMsg] = msg match {
     case CheckSat => checkSatParser
@@ -97,7 +100,7 @@ trait SmtLibParsers[Expr, Ident, Sort] extends Smts[Expr, Ident, Sort] {
 
 
   /** Parser for any result, used for testing. */
-  lazy val resultParser: PackratParser[SmtsMsg] = { errorParser | satParser | modelParser | unsatCoreParser | valuesParser }
+  lazy val resultParser: PackratParser[SmtsMsg] = { timeoutParser | errorParser | satParser | modelParser | unsatCoreParser | valuesParser }
 
 }
 

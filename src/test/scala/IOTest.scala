@@ -21,18 +21,22 @@ package smts.test
 import java.io._
 
 import scala.annotation.tailrec
+import sys.process.stringSeqToProcess
 
 import smts._
 
 import smts.test.ExprStructure._
 
 /** Tests Smts' writer and reader. */
-object IOTest extends Verboser with OptionHandler {
+object IOTest extends Verboser with OptionHandler with Animator {
 
   object Options {
     private var _log: Option[String] = None
     def log = _log
     def log_= (newLog: String) = _log = Some(newLog)
+    private var _timeout: Option[Int] = None
+    def timeout = _timeout
+    def timeout_= (newTo: Int) = _timeout = Some(newTo)
     private var _dirs: List[String] = Nil
     def dirs = _dirs
     def dirs_= (newDirs: Traversable[String]) = _dirs = newDirs.toList
@@ -44,6 +48,7 @@ object IOTest extends Verboser with OptionHandler {
     ("-h", { s: String => { printHelp() ; sys exit -1 } }, "     prints this message." :: Nil) ::
     ("--help", { s: String => { printHelp() ; sys exit -1 } }, " also prints this message." :: Nil) ::
     ("--log=", { s: String => Options.log = optionValue(s) }, " activates logging." :: Nil) ::
+    ("--timeout=", { s: String => Options.timeout = optionValue(s).toInt }, " sets a timeout for each query to the solver, in seconds." :: Nil) ::
     Nil
   }
 
@@ -52,7 +57,60 @@ object IOTest extends Verboser with OptionHandler {
     Nil
   }
 
+  val animatorLineCount = 6
+  val animatorPrint = { s: String => verb(s) }
+
+  // Line 1.
+  def printBenchNumber(benchs: Int, total: Int) = printLine(1, {
+    benchs.toString :: "/" :: total.toString :: " files benchmarked so far (" ::
+    Timer.now.toString :: "ms)." :: Nil
+  })
+
+  // Line 2.
+  def printGeneralStatus() = printLine(2, {
+    " Success: " :: BenchStats.success.toString ::
+    ", failed: " :: BenchStats.failed.toString ::
+    ", error: " :: BenchStats.error.toString ::
+    ", total: " :: BenchStats.total.toString ::
+    " || Timeouts: " :: BenchStats.timeout.toString ::
+    ", unknown: " :: BenchStats.unknown.toString ::
+    ", different: " :: BenchStats.different.toString ::
+    "." :: Nil
+  })
+
+  // Line 3.
+  val globalProgressAnim = new KawaiiAnimation()
+  def printGlobalProgress(current: Int, max: Int) = animLine(3,current,max,globalProgressAnim)
+
+  // Line 4.
+  def printBenchName(file: String) = printLine(4, {
+    "Currently running on file \"" :: file :: "\"." :: Nil
+  })
+
+  // Line 5.
+  def printFileStatus() = printLine(5, {
+    " Success: " :: BenchStats.Current.success.toString ::
+    ", failed: " :: BenchStats.Current.failed.toString ::
+    ", error: " :: BenchStats.Current.error.toString ::
+    ", total: " :: BenchStats.Current.total.toString ::
+    " || Timeouts: " :: BenchStats.Current.timeout.toString ::
+    ", unknown: " :: BenchStats.Current.unknown.toString ::
+    ", different: " :: BenchStats.Current.different.toString ::
+    "." :: Nil
+  })
+
+  // Line 6.
+  val fileProgressAnim = new KawaiiAnimation()
+  def printFileProgress(current: Int, max: Int) = animLine(6,current,max,fileProgressAnim)
+
+
+
+
   setOptions()
+
+
+
+
 
   object Timer {
     private var _timer: Long = 0
@@ -77,28 +135,55 @@ object IOTest extends Verboser with OptionHandler {
   def logln() = Logger.logln()
 
   object BenchStats {
+    def updateFileStatus(lines: Int, lineCount: Int) = {
+      printFileStatus()
+      printFileProgress(lines,lineCount)
+    }
+
     object Current {
       private var _cSuccess = 0
+      def success = _cSuccess
       def successInc = {
         _cSuccess += 1
         _success += 1
       }
-      private var _cDifferent = 0
-      def differentInc = {
-        _cDifferent += 1
-        _different += 1
-      }
+
       private var _cFailed = 0
+      def failed = _cFailed
       def failedInc = {
         _cFailed += 1
         _failed += 1
       }
+
       private var _cError = 0
+      def error = _cError
       def errorInc = {
         _cError += 1
         _error += 1
       }
-      def reset = { _cSuccess = 0 ; _cDifferent = 0 ; _cFailed = 0 }
+
+      private var _cTimeout = 0
+      def timeout = _cTimeout
+      def timeoutInc = {
+        _cTimeout += 1
+        _timeout += 1
+      }
+
+      private var _cDifferent = 0
+      def different = _cDifferent
+      def differentInc = {
+        _cDifferent += 1
+        _different += 1
+      }
+
+      private var _cUnknown = 0
+      def unknown = _cUnknown
+      def unknownInc = {
+        _cUnknown += 1
+        _unknown += 1
+      }
+      def reset = { _cSuccess = 0 ; _cDifferent = 0 ; _cFailed = 0 ; _cError = 0 ; _cTimeout = 0 ; _cUnknown = 0}
+      def total = success + failed + error
     }
 
     private var _currentFile = ""
@@ -110,41 +195,43 @@ object IOTest extends Verboser with OptionHandler {
     def stop = _time -= System.currentTimeMillis
     def time = _time
 
-    // def updateGlobalStatus = {
-    //   printGlobalProgress({ max => max * fileCount / totalFileCount })
-    //   printGeneralStatus(success,different,failed,total)
-    //   printBenchNumber(fileCount, totalFileCount)
-    // }
+    def updateGlobalStatus = {
+      printGlobalProgress(fileCount,totalFileCount)
+      printGeneralStatus()
+      printBenchNumber(fileCount, totalFileCount)
+    }
     private var _fileCount: Int = 0
     def fileCount = _fileCount
     def fileCountIncrement = {
       _fileCount += 1
-      // updateGlobalStatus
+      updateGlobalStatus
     }
     private var _totalFileCount: Int = 0
     def totalFileCount = _totalFileCount
     def totalFileCount_= (n: Int) = {
       _totalFileCount = n
     }
-    // def update(s: Int, d: Int, f: Int) = {
-    //   _success += s ; _different += d ; _failed += f
-      // updateGlobalStatus
-    // }
+
     private var _success: Int = 0
     def success = _success
-    private var _different: Int = 0
-    def different = _different
     private var _failed: Int = 0
     def failed = _failed
     private var _error: Int = 0
     def error = _error
-    def total = success + different + failed + error
-
-    def printStatus = println ("Success: " + success + ", different: " + different + ", failed: " + failed + ". Total: " + total + ".")
+    private var _different: Int = 0
+    def different = _different
+    private var _timeout: Int = 0
+    def timeout = _timeout
+    private var _unknown: Int = 0
+    def unknown = _unknown
+    def total = success + failed + error
   }
 
   // Creating solver process.
-  val command = "z3 -smt2 -in"
+  val command = "z3 -smt2 -in" + (Options.timeout match {
+    case Some(to) => " -t:" + to
+    case None => ""
+  })
 
   object Solver {
     private var solver = (new ProcessBuilder(command.split(" "): _*)).redirectErrorStream(true).start
@@ -167,7 +254,7 @@ object IOTest extends Verboser with OptionHandler {
 
     // Writer side.
     protected def solverWriter = Solver.writer
-    protected def notifyReader(msg: ToSmtsMsg) = { println("notifying reader") ; readMsg(msg) }
+    protected def notifyReader(msg: ToSmtsMsg) = readMsg(msg)
 
     // Reader side.
     protected def solverReader = Solver.reader
@@ -177,22 +264,20 @@ object IOTest extends Verboser with OptionHandler {
   val smts = if (Options.log.isDefined) new SmtsTrait {
     import Messages._
     def apply(msg: ToSmtsMsg) = handleMsg(msg)
-    def checkMsg(msg: SmtsMsg): Unit = { println("checking message") ; msg match {
+    def checkMsg(msg: SmtsMsg): Unit = msg match {
       case Messages.SolverError(expl) => {
         BenchStats.Current.errorInc
         Logger.writer write ("; Solver error:\n")
         expl foreach (e => Logger.writer write (";   " + e + "\n"))
+        Logger.flush
       }
-      case _ => {
-        BenchStats.Current.successInc
-        Logger.writer write ("; Success:\n")
-        Logger.writer write ("; ") ; Logger.writer write msg.toString
-      }
-    }}
-    protected def notifyMaster(msg: SmtsMsg) = { println("notifying master") ; checkMsg(msg) }
+      case Unknown => { BenchStats.Current.unknownInc ; BenchStats.Current.successInc }
+      case _ => BenchStats.Current.successInc
+    }
+    protected def notifyMaster(msg: SmtsMsg) = checkMsg(msg)
     def bw = Logger.writer
     protected def logMsg(msg: Messages.ToSmtsMsg) = writeMsg(msg,bw)
-    protected def logResultLine(line: String) = { bw write ";" ; bw write line }
+    protected def logResultLine(line: String) = { bw write "; " ; bw write line ; bw write "\n" }
 
   } else new SmtsTrait {
     import Messages._
@@ -204,47 +289,57 @@ object IOTest extends Verboser with OptionHandler {
         expl foreach (e => Logger.writer write (";   " + e + "\n"))
         Logger.flush
       }
-      case _ => {
-        BenchStats.Current.successInc
-        Logger.writer write ("; Success:\n")
-        Logger.writer write ("; ") ; Logger.writer write msg.toString
-        Logger.flush
-      }
+      case _ => BenchStats.Current.successInc
     }
     protected def notifyMaster(msg: SmtsMsg) = checkMsg(msg)
-    protected def logMsg(msg: Messages.ToSmtsMsg) = println("logMsg, doing nothing")
+    protected def logMsg(msg: Messages.ToSmtsMsg) = ()
     protected def logResultLine(line: String) = ()
   }
-  if (smts == null) verbln("Null smts on init.")
+
+  BenchStats.totalFileCount = (Options.dirs.foldLeft(0)(
+    (n,dir) => n + (Seq("bash","-c", "find " + dir + " -iname \"*.smt2\" | wc -l") !!).replaceAll("\\s+","").toInt
+  ))
+
+  if (BenchStats.totalFileCount == 0) {
+    space
+    verbln("No benchmarks found, exiting.")
+    space
+    sys exit 0
+  }
 
   space
   title0("Testing Smts' writer and reader.")
-  Logger.newFile("ioTest.log")
-  verbln("Logging in file ioTest.log.")
+  Options.log match {
+    case Some(file) => {
+      Logger.newFile(file)
+      verbln("Logging in file " + file + ".")
+    }
+    case None => ()
+  }
   space
+  initAnim()
 
   logln("; Smts' io.")
   logln(";   arguments: " + args.toList)
+  logln("; Solver command: " + command)
   logln
   logln
   Logger.flush
 
   Timer.start
-  verbln("Directory cardinality: " + Options.dirs.size)
   Options.dirs foreach (arg => {
     exploreAndDo(arg,workOnBench)
   })
   Timer.stop
-  verbln("Killing solver.")
   Solver.kill
 
   def workOnBench(filePath: String): Unit = {
-    verbln("Working on file " + filePath)
+    // verbln("Working on file " + filePath)
 
-    // printBenchName(filePath)
-    // BenchStats.updateGlobalStatus
+    printBenchName(filePath)
+    BenchStats.updateGlobalStatus
     logln("; Working on file " + filePath)
-    smts(smts.Messages.SetInfo(":print-success",Some("true")))
+    smts(smts.Messages.SetOption(":print-success true"))
     val br = new BufferedReader(new FileReader(filePath))
 
     val lnr = new LineNumberReader(new FileReader(new File(filePath)))
@@ -252,9 +347,8 @@ object IOTest extends Verboser with OptionHandler {
     val lineCount = lnr.getLineNumber()
 
     @tailrec
-    def loop(line: String = "", success: Int = 0, different: Int = 0, failed: Int = 0, lines: Int = 0): (Int,Int,Int) = {
-      // printFileStatus(success, different, failed, success + different + failed)
-      // printFileProgress(lines,lineCount)
+    def loop(line: String = "", lines: Int = 0): Unit = {
+      BenchStats.updateFileStatus(lines,lineCount)
       val nuLine = br.readLine
       if (nuLine != null) {
         val cleanLine = if (line == "") nuLine.trim else line + " " + nuLine.trim
@@ -266,13 +360,15 @@ object IOTest extends Verboser with OptionHandler {
               val sw = new StringWriter()
               smts.writeMsg(msg,sw)
               if ((cleanLine + "\n").replaceAll("\\s+","") == sw.toString.replaceAll("\\s+","")) {
-                logln("; Line :")
-                logln(";   " + cleanLine)
-                log(sw.toString)
-                logln("")
-                Logger.flush
-                smts(msg)
-                loop("", lines + 1)
+                if (
+                  try { smts(msg) ; true } catch {
+                    case e: java.io.IOException => {
+                      BenchStats.Current.timeoutInc
+                      BenchStats.Current.successInc
+                      false
+                    }
+                  }
+                ) loop("", lines + 1) else ()
               } else {
                 logln("; Parse successful but strings are different. Line:")
                 logln(";   " + cleanLine)
@@ -280,7 +376,15 @@ object IOTest extends Verboser with OptionHandler {
                 logln("")
                 Logger.flush
                 BenchStats.Current.differentInc
-                loop("", lines + 1)
+                if (
+                  try { smts(msg) ; true } catch {
+                    case e: java.io.IOException => {
+                      BenchStats.Current.timeoutInc
+                      BenchStats.Current.successInc
+                      false
+                    }
+                  }
+                ) loop("", lines + 1) else ()
               }
             }
             case smts.Fail(msg) => {
@@ -294,31 +398,28 @@ object IOTest extends Verboser with OptionHandler {
             }
           }
         } else loop(cleanLine, lines + 1)
-      } else (success,different,failed)
+      } else ()
     }
 
-    if (smts == null) verbln("Null smts")
     smts.clearConsigned
-    val result = loop()
-    verbln("Restarting solver.")
+    loop()
     Solver.restart
     BenchStats.Current.reset
-    verbln()
-    val sum = result._1 + result._2 + result._3
     logln
-    logln("; Success:   " + result._1)
-    logln("; Different: " + result._2)
-    logln("; Failed:    " + result._3)
-    logln("; Total:     " + sum)
+    logln("; Success:   " + BenchStats.Current.success)
+    logln("; Failed:    " + BenchStats.Current.failed)
+    logln("; Error:     " + BenchStats.Current.error)
+    logln("; Total:     " + BenchStats.Current.total)
+    logln("; Different: " + BenchStats.Current.different)
+    logln("; Unknown:   " + BenchStats.Current.unknown)
+    logln("; Timeout: " + BenchStats.Current.timeout)
     logln
     logln
     Logger.flush
     BenchStats.fileCountIncrement
-    BenchStats.printStatus
   }
 
   def exploreAndDo(filePath: String, work: String => Unit): Unit = {
-    verbln("Directory (or file): " + filePath + ".")
     val file = new File(filePath)
     if (file.isDirectory) {
       val dir = if (filePath endsWith "/") filePath else filePath + "/"
