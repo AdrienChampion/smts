@@ -35,8 +35,10 @@ trait SmtsWriter[Expr,Ident,Sort] extends SmtLibPrinters[Expr,Ident,Sort] {
   protected def notifyReader(msg: ToSmtsMsg): Unit
 
   /** Writes the command the message corresponds to. */
-  protected def writeMsg(msg: ToSmtsMsg): Unit = {
+  protected def handleMsg(msg: ToSmtsMsg): Unit = {
+    println("writing message " + msg)
     writeMsg(msg,solverWriter)
+    println("logging message")
     logMsg(msg)
   }
 }
@@ -44,12 +46,12 @@ trait SmtsWriter[Expr,Ident,Sort] extends SmtLibPrinters[Expr,Ident,Sort] {
 /** Writes on the solver process input. Only forwards the query
   * messages (those producing a result). */
 trait WriterNoSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
-  override protected def writeMsg(msg: Messages.ToSmtsMsg) = {
+  override protected def handleMsg(msg: Messages.ToSmtsMsg) = {
+    super.handleMsg(msg)
     msg match {
       case _: Messages.QueryMsg => notifyReader(msg)
       case _ => ()
     }
-    super.writeMsg(msg)
   }
 }
 
@@ -57,8 +59,8 @@ trait WriterNoSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
   * reader to parse for '''success'''. */
 trait WriterSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
   import Messages.ToSmtsMsg
-  override protected def writeMsg(msg: Messages.ToSmtsMsg): Unit = {
-    notifyReader(msg) ; super.writeMsg(msg)
+  override protected def handleMsg(msg: Messages.ToSmtsMsg): Unit = {
+    super.handleMsg(msg) ; notifyReader(msg)
   }
 }
 
@@ -92,9 +94,12 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
 
   /** Reads on the solver reader and parses it. */
   protected def readMsg(msg: ToSmtsMsg) = {
+    println("attempting to read a line")
+    println("msg: " + msg)
     val line = {
       var temp = solverReader.readLine
-      while (temp == "") temp = solverReader.readLine
+      println("temp: " + temp)
+      while (temp == "") { temp = solverReader.readLine ; println("temp: " + temp) }
       temp
     }
 
@@ -105,9 +110,10 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
     def loop(
       text: String = line, parentheses: Int = getParenthesisCount(line)
     ): String = parentheses match {
-      case _ if (text startsWith "(error") => text
-      case 0 => text
+      case _ if (text startsWith "(error") => { println("error") ; text }
+      case 0 => { println("line is sane") ; text }
       case n if n >= 0 => {
+        println("line is not sane")
         val newLine = solverReader.readLine
         logResultLine(newLine)
         loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
@@ -115,21 +121,21 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
       case _ => throw new NegParCountException(text)
     }
 
-    println("la chatte d'emy est trop jolie")
     try {
+      println("Getting lines.")
       val (text,parser) = (loop(),getParser(msg))
       phrase(parser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))) match {
-        case Success(smtsMsg,_) => { println("success") ; notifyMaster(smtsMsg) }
-        case NoSuccess(msg,next) => { println("error") ; notifyMaster(Messages.SolverError(
+        case Success(smtsMsg,_) => notifyMaster(smtsMsg)
+        case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(
           "Error while parsing output of message" :: msg.toString ::
           msg :: next.pos.longString.split("\n").toList
-        ))}
+        ))
       }
     } catch {
-      case NegParCountException(line) => { println("negparcount") ; notifyMaster(Messages.SolverError(
+      case NegParCountException(line) => notifyMaster(Messages.SolverError(
         "Illegal negative count of parentheses triggered by message" ::
         msg.toString :: "Output: " :: line.split("\n").toList
-      ))}
+      ))
     }
   }
 

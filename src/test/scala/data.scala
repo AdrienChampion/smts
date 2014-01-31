@@ -129,6 +129,17 @@ object ExprStructure {
     def unapply(arg: OrN) = Some(arg.kids)
   }
 
+  /** Imply class. */
+  class Impl private(val lhs: Expr, val rhs: Expr) extends BoolExpr {
+    def writeTo(w: Writer) = {
+      w write "(=> " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
+    }
+  }
+  object Impl extends ConsignedExpr[(Expr,Expr), Impl] {
+    def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Impl(lhs,rhs))
+    def unapply(arg: Impl) = Some((arg.lhs,arg.rhs))
+  }
+
   /** N-ary equal class. */
   class Eq private(val kids: Traversable[Expr]) extends BoolExpr {
     def writeTo(w: Writer) = {
@@ -191,7 +202,7 @@ object ExprStructure {
   class Forall private(val vars: Traversable[(Ident,Sort)], val expr: Expr) extends BoolExpr {
     def writeTo(w: Writer) = {
       w write "(forall ("
-      vars foreach (v => { w write " (" ; v._1 writeTo w ; v._2 writeTo w ; w write ")" })
+      vars foreach (v => { w write " (" ; v._1 writeTo w ; w write " " ; v._2 writeTo w ; w write ")" })
       w write " ) " ; expr writeTo w ; w write ")"
     }
   }
@@ -203,7 +214,7 @@ object ExprStructure {
   class Exists private(val vars: Traversable[(Ident,Sort)], val expr: Expr) extends BoolExpr {
     def writeTo(w: Writer) = {
       w write "(exists ("
-      vars foreach (v => { w write " (" ; v._1 writeTo w ; v._2 writeTo w ; w write ")" })
+      vars foreach (v => { w write " (" ; v._1 writeTo w ; w write " " ; v._2 writeTo w ; w write ")" })
       w write " ) " ; expr writeTo w ; w write ")"
     }
   }
@@ -362,6 +373,7 @@ with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
     "(" ~ "forall" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Forall(vars,e) } |
     "(" ~ "exists" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Exists(vars,e) } |
     "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
+    "(" ~ "=>" ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Impl(lhs,rhs) } |
     "(" ~ "=" ~> rep(exprParser) <~ ")" ^^ { case kids => Eq(kids) } |
     "(" ~ "=" ~> rep(arithParser) <~ ")" ^^ { case kids => Eq(kids) } |
     "(" ~ "<"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Lt(lhs,rhs) } |

@@ -30,9 +30,9 @@ import smts.test.ExprStructure._
 object IOTest extends Verboser with OptionHandler {
 
   object Options {
-    private var _log = false
+    private var _log: Option[String] = None
     def log = _log
-    def activateLog = _log = true
+    def log_= (newLog: String) = _log = Some(newLog)
     private var _dirs: List[String] = Nil
     def dirs = _dirs
     def dirs_= (newDirs: Traversable[String]) = _dirs = newDirs.toList
@@ -43,14 +43,16 @@ object IOTest extends Verboser with OptionHandler {
   val myOptions = {
     ("-h", { s: String => { printHelp() ; sys exit -1 } }, "     prints this message." :: Nil) ::
     ("--help", { s: String => { printHelp() ; sys exit -1 } }, " also prints this message." :: Nil) ::
-    ("--log", { s: String => Options.activateLog }, " activates logging." :: Nil) ::
+    ("--log=", { s: String => Options.log = optionValue(s) }, " activates logging." :: Nil) ::
     Nil
   }
 
   val myArguments = {
-    ("--dir=", { s: String => { Options.dirs = optionValue(s).split(",") } }, "<dir1>,<dir2>,... The directories where the benchmarks are." :: Nil) ::
+    ("--dir=", { s: String => Options.dirs = optionValue(s).split(",") }, "<dir1>,<dir2>,... The directories where the benchmarks are." :: Nil) ::
     Nil
   }
+
+  setOptions()
 
   object Timer {
     private var _timer: Long = 0
@@ -64,11 +66,15 @@ object IOTest extends Verboser with OptionHandler {
     private var _writer: BufferedWriter = null
     def writer = _writer
     def flush = _writer.flush
-    def newFile(filePath: String) = _writer = new BufferedWriter(new FileWriter(filePath))
+    def newFile(filePath: String) = _writer = { logging = true ; new BufferedWriter(new FileWriter(filePath)) }
+    private var logging = false
+    def log(s: String) = if (logging) Logger.writer write s
+    def logln(s: String) = if (logging) { log(s) ; log("\n") }
+    def logln() = log("\n")
   }
-  def log(s: String) = Logger.writer write s
-  def logln(s: String) = { log(s) ; log("\n") }
-  def logln() = log("\n")
+  def log(s: String) = Logger.log(s)
+  def logln(s: String) = Logger.logln(s)
+  def logln() = Logger.logln()
 
   object BenchStats {
     object Current {
@@ -156,46 +162,42 @@ object IOTest extends Verboser with OptionHandler {
     }
   }
 
-  trait SmtsTrait extends SmtsTest with WriterNoSuccess[Expr,Ident,Sort] with SmtsReader[Expr,Ident,Sort] {
+  trait SmtsTrait extends SmtsTest with WriterSuccess[Expr,Ident,Sort] with SmtsReader[Expr,Ident,Sort] {
     import Messages.{ToSmtsMsg,SmtsMsg}
 
     // Writer side.
     protected def solverWriter = Solver.writer
-    protected def notifyReader(msg: ToSmtsMsg) = readMsg(msg)
+    protected def notifyReader(msg: ToSmtsMsg) = { println("notifying reader") ; readMsg(msg) }
 
     // Reader side.
     protected def solverReader = Solver.reader
   }
 
   // Instantiating reader and writer on the structured Smts.
-  val smts = if (Options.log) new SmtsTrait {
+  val smts = if (Options.log.isDefined) new SmtsTrait {
     import Messages._
-    def apply(msg: ToSmtsMsg) = writeMsg(msg)
-    def checkMsg(msg: SmtsMsg): Unit = {
-      println("emy elle est trop jolie")
-      msg match {
-        case Messages.SolverError(expl: List[String]) => {
-          BenchStats.Current.errorInc
-          Logger.writer write ("; Solver error:\n")
-          expl foreach (e => Logger.writer write (";   " + e + "\n"))
-        }
-        case _ => {
-          BenchStats.Current.successInc
-          Logger.writer write ("; Success:\n")
-          Logger.writer write ("; ") ; Logger.writer write msg.toString
-        }
+    def apply(msg: ToSmtsMsg) = handleMsg(msg)
+    def checkMsg(msg: SmtsMsg): Unit = { println("checking message") ; msg match {
+      case Messages.SolverError(expl) => {
+        BenchStats.Current.errorInc
+        Logger.writer write ("; Solver error:\n")
+        expl foreach (e => Logger.writer write (";   " + e + "\n"))
       }
-    }
-    protected def notifyMaster(msg: SmtsMsg) = { println("notify master") ; checkMsg(msg) }
+      case _ => {
+        BenchStats.Current.successInc
+        Logger.writer write ("; Success:\n")
+        Logger.writer write ("; ") ; Logger.writer write msg.toString
+      }
+    }}
+    protected def notifyMaster(msg: SmtsMsg) = { println("notifying master") ; checkMsg(msg) }
     def bw = Logger.writer
-    protected def logMsg(msg: Messages.ToSmtsMsg) = if (Options.log) writeMsg(msg,bw)
-    protected def logResultLine(line: String) = if (Options.log) { bw write ";" ; bw write line }
+    protected def logMsg(msg: Messages.ToSmtsMsg) = writeMsg(msg,bw)
+    protected def logResultLine(line: String) = { bw write ";" ; bw write line }
+
   } else new SmtsTrait {
     import Messages._
-    def apply(msg: ToSmtsMsg) = writeMsg(msg)
-    def checkMsg(msg: SmtsMsg): Unit = {
-      println("emy elle est trop jolie")
-      msg match {
+    def apply(msg: ToSmtsMsg) = handleMsg(msg)
+    def checkMsg(msg: SmtsMsg): Unit = msg match {
       case Messages.SolverError(expl: List[String]) => {
         BenchStats.Current.errorInc
         Logger.writer write ("; Solver error:\n")
@@ -209,14 +211,11 @@ object IOTest extends Verboser with OptionHandler {
         Logger.flush
       }
     }
-    }
     protected def notifyMaster(msg: SmtsMsg) = checkMsg(msg)
-    protected def logMsg(msg: Messages.ToSmtsMsg) = ()
+    protected def logMsg(msg: Messages.ToSmtsMsg) = println("logMsg, doing nothing")
     protected def logResultLine(line: String) = ()
   }
   if (smts == null) verbln("Null smts on init.")
-
-  setOptions()
 
   space
   title0("Testing Smts' writer and reader.")
@@ -224,8 +223,8 @@ object IOTest extends Verboser with OptionHandler {
   verbln("Logging in file ioTest.log.")
   space
 
-  logln("Smts' io.")
-  logln("  arguments: " + args.toList)
+  logln("; Smts' io.")
+  logln(";   arguments: " + args.toList)
   logln
   logln
   Logger.flush
@@ -244,7 +243,8 @@ object IOTest extends Verboser with OptionHandler {
 
     // printBenchName(filePath)
     // BenchStats.updateGlobalStatus
-    logln("Working on file " + filePath)
+    logln("; Working on file " + filePath)
+    smts(smts.Messages.SetInfo(":print-success",Some("true")))
     val br = new BufferedReader(new FileReader(filePath))
 
     val lnr = new LineNumberReader(new FileReader(new File(filePath)))
@@ -266,28 +266,29 @@ object IOTest extends Verboser with OptionHandler {
               val sw = new StringWriter()
               smts.writeMsg(msg,sw)
               if ((cleanLine + "\n").replaceAll("\\s+","") == sw.toString.replaceAll("\\s+","")) {
-                logln("Parsed command")
-                log("  " + sw.toString)
-                logln("from line:")
-                logln("  " + cleanLine)
+                logln("; Line :")
+                logln(";   " + cleanLine)
+                log(sw.toString)
+                logln("")
                 Logger.flush
                 smts(msg)
                 loop("", lines + 1)
               } else {
-                logln("Parse successful but strings are different. Original:")
-                logln("  " + cleanLine)
-                logln("Printed version:")
-                log("  " + sw.toString)
+                logln("; Parse successful but strings are different. Line:")
+                logln(";   " + cleanLine)
+                log(sw.toString)
+                logln("")
                 Logger.flush
                 BenchStats.Current.differentInc
                 loop("", lines + 1)
               }
             }
             case smts.Fail(msg) => {
-              logln("Parse failed on line:")
-              logln("  " + cleanLine)
-              logln("Error message:")
-              logln(msg)
+              logln("; Parse failed on line:")
+              logln(";   " + cleanLine)
+              logln("; Error message:")
+              logln("; " + msg)
+              logln("")
               BenchStats.Current.failedInc
               loop("", lines + 1)
             }
@@ -304,10 +305,12 @@ object IOTest extends Verboser with OptionHandler {
     BenchStats.Current.reset
     verbln()
     val sum = result._1 + result._2 + result._3
-    logln("Success:   " + result._1)
-    logln("Different: " + result._2)
-    logln("Failed:    " + result._3)
-    logln("Total:     " + sum)
+    logln
+    logln("; Success:   " + result._1)
+    logln("; Different: " + result._2)
+    logln("; Failed:    " + result._3)
+    logln("; Total:     " + sum)
+    logln
     logln
     Logger.flush
     BenchStats.fileCountIncrement
