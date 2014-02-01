@@ -30,7 +30,27 @@ import smts.test.ExprStructure._
 /** Tests Smts' writer and reader. */
 object IOTest extends Verboser with OptionHandler with Animator {
 
+  sealed trait Solver {
+    val command: String
+    def timeoutOption(to: Int): String
+  }
+  object Z3 extends Solver {
+    val command = "z3 -in -smt2"
+    def timeoutOption(to: Int) = " -t:" + to
+  }
+  object Cvc4 extends Solver {
+    val command = "cvc4 -q --lang smt"
+    def timeoutOption(to: Int) = " --tlimit-per=" + (to * 1000)
+  }
+  object Mathsat extends Solver {
+    val command = "mathsat"
+    def timeoutOption(to: Int) = "" + to
+  }
+
   object Options {
+    private var _solver: Solver = Z3
+    def solver = _solver
+    def solver_= (newSolver: Solver) = _solver = newSolver
     private var _log: Option[String] = None
     def log = _log
     def log_= (newLog: String) = _log = Some(newLog)
@@ -48,6 +68,12 @@ object IOTest extends Verboser with OptionHandler with Animator {
     ("-h", { s: String => { printHelp() ; sys exit -1 } }, "     prints this message." :: Nil) ::
     ("--help", { s: String => { printHelp() ; sys exit -1 } }, " also prints this message." :: Nil) ::
     ("--log=", { s: String => Options.log = optionValue(s) }, " activates logging." :: Nil) ::
+    ("--solver=", { s: String => optionValue(s) match {
+      case "z3" => ()
+      case "mathsat" => Options.solver = Mathsat
+      case "cvc4" => Options.solver = Cvc4
+      case string => { optionError("unexpected solver value \"" + string + "\".") ; printHelp() ; sys exit -1 }
+    } }, " the solver to use: z3, mathsat or cvc4 (default z3)." :: Nil) ::
     ("--timeout=", { s: String => Options.timeout = optionValue(s).toInt }, " sets a timeout for each query to the solver, in seconds." :: Nil) ::
     Nil
   }
@@ -228,8 +254,8 @@ object IOTest extends Verboser with OptionHandler with Animator {
   }
 
   // Creating solver process.
-  val command = "z3 -smt2 -in" + (Options.timeout match {
-    case Some(to) => " -t:" + to
+  val command = Options.solver.command + (Options.timeout match {
+    case Some(to) => Options.solver.timeoutOption(to)
     case None => ""
   })
 

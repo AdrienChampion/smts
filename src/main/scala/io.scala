@@ -97,8 +97,6 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
       temp
     }
 
-    logResultLine(line)
-
     // Internal loop to get all the lines.
     @tailrec
     def loop(
@@ -115,7 +113,11 @@ trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
     }
 
     try {
-      val (text,parser) = (loop(),getParser(msg))
+      val text = msg match {
+        case Messages.KillSolver if line == null => { logResultLine("success") ; "success" }
+        case _ => loop()
+      }
+      val parser = getParser(msg)
       phrase(parser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))) match {
         case Success(smtsMsg,_) => notifyMaster(smtsMsg)
         case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(

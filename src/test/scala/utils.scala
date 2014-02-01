@@ -44,7 +44,7 @@ trait Verboser extends App {
 /** Handles the options of the '''App'''. */
 trait OptionHandler extends App {
   val optionPrint: String => Unit
-  def optionError(s: String) = optionPrint("\033[1;31mError\033[0m " + s)
+  def optionError(s: String) = { optionPrint("\033[1;31mError\033[0m " + s) }
   def optionValue(s: String) = s.split("=")(1)
   /** List of triplets: the option prefix, what to do with it, and an
     * explanation of the option (used for '''printHelp'''). */
