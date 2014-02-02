@@ -289,7 +289,7 @@ object IOTest extends Verboser with OptionHandler with Animator {
   // Instantiating reader and writer on the structured Smts.
   val smts = if (Options.log.isDefined) new SmtsTrait {
     import Messages._
-    def apply(msg: ToSmtsMsg) = handleMsg(msg)
+    def apply(msg: ToSmtsMsg) = writeMsg(msg)
     def checkMsg(msg: SmtsMsg): Unit = msg match {
       case Messages.SolverError(expl) => {
         BenchStats.Current.errorInc
@@ -307,7 +307,7 @@ object IOTest extends Verboser with OptionHandler with Animator {
 
   } else new SmtsTrait {
     import Messages._
-    def apply(msg: ToSmtsMsg) = handleMsg(msg)
+    def apply(msg: ToSmtsMsg) = writeMsg(msg)
     def checkMsg(msg: SmtsMsg): Unit = msg match {
       case Messages.SolverError(expl: List[String]) => {
         BenchStats.Current.errorInc

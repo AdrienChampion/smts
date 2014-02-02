@@ -16,11 +16,26 @@
  *  If not, see <http://www.gnu.org/licenses/>.                              *
 \* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-import java.io.{Writer}
+package smts
 
-import scala.util.parsing.combinator.PackratParsers
+import java.io.{Writer,BufferedWriter,FileWriter}
 
-/** This package contains the Smts SMT solver wrapper. */
-package object smts {
+/** Provides the '''ReaderLog''' trait. */
+trait SmtsLog[Expr,Ident,Sort] extends SmtsIO[Expr,Ident,Sort] {
 
+  /** Reader should extend this trait to activate logging. */
+  trait ReaderLog extends SmtsReaderSuccess with SmtLibPrinters {
+    import Messages.ToSmtsMsg
+
+    /** Path to the logging file. */
+    val logFilePath: String
+    /** '''BufferedWriter''' on the logging file. */
+    val logBW = new BufferedWriter(new FileWriter(logFilePath))
+
+    override protected def logMsg(msg: ToSmtsMsg) = writeMsg(msg,logBW)
+    override protected def logResultLine(line: String) = {
+      logBW write "; " ; logBW write line ; logBW write "\n"
+    }
+
+  }
 }

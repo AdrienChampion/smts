@@ -18,125 +18,190 @@
 
 package smts
 
-import java.io.{Writer,BufferedReader}
+import java.io._
 
-/** Writes on the solver process input. Forwards all messages to the
-  * reader to parse for '''success'''. */
-trait SmtsWriter[Expr,Ident,Sort] extends SmtLibPrinters[Expr,Ident,Sort] {
-  import Messages.ToSmtsMsg
+/** Provides writing and reading traits. */
+trait SmtsIO[Expr,Ident,Logic]
+extends SmtsPrinters[Expr,Ident,Logic]
+with SmtsParsers[Expr,Ident,Logic] {
 
-  /** Yields a '''Writer''' on the solver process. */
-  protected def solverWriter: Writer
+  /** Writes on the solver process input. Forwards all messages to the
+    * reader to parse for '''success'''. */
+  trait SmtsWriter extends SmtLibPrinters {
+    import Messages.ToSmtsMsg
 
-  /** Logs the command of the message if logging is activated. */
-  protected def logMsg(msg: ToSmtsMsg): Unit
+    /** The solver information. */
+    protected val solverInfo: SolverInfo
 
-  /** Notifies the reader it will have to parse something. */
-  protected def notifyReader(msg: ToSmtsMsg): Unit
+    /** Initializes the solver by sending the start messages. */
+    protected def initSolver =
+      solverInfo.startMsgs foreach (msg => writeMsg(msg))
 
-  /** Writes the command the message corresponds to. */
-  protected def handleMsg(msg: ToSmtsMsg): Unit = {
-    writeMsg(msg,solverWriter) ; logMsg(msg)
+    /** Restarts the solver. */
+    protected def restart: Unit
+    /** Kills the solver. */
+    protected def killSolver: Unit
+
+    /** Creates a new solver process. */
+    protected def createSolverProcess = (new ProcessBuilder(
+      solverInfo.command.split(" "): _*
+    )).redirectErrorStream(true).start
+
+    /** Yields a '''Writer''' on the solver process. */
+    protected def solverWriter: Writer
+
+    /** Notifies the reader it will have to parse something. */
+    protected def notifyReader(msg: ToSmtsMsg): Unit
+    /** Notifies the reader that the reader on the solver process changed. */
+    protected def notifyReader(br: BufferedReader): Unit
+
+    /** Writes the command the message corresponds to. */
+    protected def writeMsg(msg: ToSmtsMsg): Unit = writeMsg(msg,solverWriter)
   }
-}
 
-/** Writes on the solver process input. Only forwards the query
-  * messages (those producing a result). */
-trait WriterNoSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
-  override protected def handleMsg(msg: Messages.ToSmtsMsg) = {
-    super.handleMsg(msg)
-    msg match {
-      case _: Messages.QueryMsg => notifyReader(msg)
-      case _ => ()
-    }
-  }
-}
+  /** Writer with a single solver process. */
+  trait SmtsWriterSimple extends SmtsWriter {
+    import Messages.Restart
 
-/** Writes on the solver process input. Forwards all messages to the
-  * reader to parse for '''success'''. */
-trait WriterSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
-  import Messages.ToSmtsMsg
-  override protected def handleMsg(msg: Messages.ToSmtsMsg): Unit = {
-    super.handleMsg(msg) ; notifyReader(msg)
-  }
-}
-
-
-/** Reads on the solver process output based on the message it
-  * receives. */
-trait SmtsReader[Expr,Ident,Sort] extends SmtLibParsers[Expr,Ident,Sort] {
-  import Messages.{SmtsMsg,ToSmtsMsg,FromSmtsMsg}
-  import scala.annotation.tailrec
-
-  /** Yields a '''Reader''' on the solver process. */
-  protected def solverReader: BufferedReader
-
-  /** Logs the result of a message if logging is activated. */
-  protected def logResultLine(line: String)
-
-  /** Notifies the reader's master on its reading. */
-  protected def notifyMaster(msg: SmtsMsg)
-
-  /** Returns the number of open parentheses minus the number of
-    * closed parentheses of a string. */
-  protected def getParenthesisCount(line: String) = {
-    val (open,closed) = line.foldLeft((0,0))(
-        (pair,c) =>
-          if (c == '(') (pair._1 + 1,pair._2)
-          else if (c == ')') (pair._1,pair._2 + 1)
-          else pair
+    /** The solver process. */
+    private var solverProcess = createSolverProcess
+    /** Returns a '''BufferedWriter''' on the solver process. */
+    protected def getSolverWriter = new BufferedWriter(
+      new OutputStreamWriter(solverProcess.getOutputStream)
     )
-    open - closed
+    /** Returns a '''BufferedReader''' on the solver process. */
+    protected def getSolverReader = new BufferedReader(
+      new InputStreamReader(solverProcess.getInputStream)
+    )
+    /** Actual writer on the solver process input. */
+    private var _solverWriter = getSolverWriter
+    def solverWriter = _solverWriter
+
+    protected def restart = {
+      solverProcess = createSolverProcess
+      _solverWriter = getSolverWriter
+      notifyReader(getSolverReader)
+    }
+    protected def killSolver = { solverProcess.destroy }
   }
 
-  /** Reads on the solver reader and parses it. */
-  protected def readMsg(msg: ToSmtsMsg) = {
-    val line = {
-      var temp = solverReader.readLine
-      while (temp == "") temp = solverReader.readLine
-      temp
+  /** Writes on the solver process input. Only forwards the query
+    * messages (those producing a result). */
+  // trait WriterNoSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
+  //   override protected def writeAndLog(msg: Messages.ToSmtsMsg) = {
+  //     super.writeAndLog(msg)
+  //     msg match {
+  //       case _: Messages.QueryMsg => notifyReader(msg)
+  //       case _ => ()
+  //     }
+  //   }
+  // }
+
+  /** Writes on the solver process input. Forwards all messages to the
+    * reader to parse for '''success'''. */
+  // trait WriterSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
+  //   import Messages.ToSmtsMsg
+  //   override protected def writeAndLog(msg: Messages.ToSmtsMsg): Unit = {
+  //     super.writeAndLog(msg) ; notifyReader(msg)
+  //   }
+  // }
+
+
+  /** Reads on the solver process output based on the message it
+    * receives. Parses success. */
+  trait SmtsReaderSuccess extends SmtLibParsers {
+    import Messages.{SmtsMsg,ToSmtsMsg,FromSmtsMsg}
+    import scala.annotation.tailrec
+
+    /** Yields a '''Reader''' on the solver process. */
+    protected var solverReader: BufferedReader
+
+    /** Logs a command corresponding to a message if logging is activated. */
+    protected def logMsg(msg: ToSmtsMsg) = ()
+    /** Logs the result of a message if logging is activated. */
+    protected def logResultLine(line: String) = ()
+
+    /** Notifies the reader's master on its reading. */
+    protected def notifyMaster(msg: SmtsMsg)
+
+    /** Returns the number of open parentheses minus the number of
+      * closed parentheses of a string. */
+    protected def getParenthesisCount(line: String) = {
+      val (open,closed) = line.foldLeft((0,0))(
+        (pair,c) =>
+        if (c == '(') (pair._1 + 1,pair._2)
+        else if (c == ')') (pair._1,pair._2 + 1)
+        else pair
+      )
+      open - closed
     }
 
-    // Internal loop to get all the lines.
-    @tailrec
-    def loop(
-      text: String = line, parentheses: Int = getParenthesisCount(line)
-    ): String = parentheses match {
-      case _ if (text startsWith "(error") => text
-      case 0 => text
-      case n if n >= 0 => {
-        val newLine = solverReader.readLine
-        logResultLine(newLine)
-        loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
+    /** Reads on the solver reader and parses it. */
+    protected def readMsg(msg: ToSmtsMsg) = {
+      val line = {
+        var temp = solverReader.readLine
+        while (temp == "") temp = solverReader.readLine
+        temp
       }
-      case _ => throw new NegParCountException(text)
-    }
 
-    try {
-      val text = msg match {
-        case Messages.KillSolver if line == null => { logResultLine("success") ; "success" }
-        case _ => loop()
+      // Internal loop to get all the lines.
+      @tailrec
+      def loop(
+        text: String = line, parentheses: Int = getParenthesisCount(line)
+      ): String = parentheses match {
+        case _ if (text startsWith "(error") => text
+        case 0 => text
+        case n if n >= 0 => {
+          val newLine = solverReader.readLine
+          logResultLine(newLine)
+          loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
+        }
+        case _ => throw new NegParCountException(text)
       }
-      val parser = getParser(msg)
-      phrase(parser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))) match {
-        case Success(smtsMsg,_) => notifyMaster(smtsMsg)
-        case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(
-          "Error while parsing output of message" :: msg.toString ::
-          msg :: next.pos.longString.split("\n").toList
+
+      try {
+        val text = msg match {
+          case Messages.KillSolver if line == null => { logResultLine("success") ; "success" }
+          case _ => loop()
+        }
+        logResultLine("")
+        phrase(getParser(msg))(
+          new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))
+        ) match {
+          case Success(smtsMsg,_) => smtsMsg match {
+            case Messages.Success => ()
+            case _ => notifyMaster(smtsMsg)
+          }
+          case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(
+            "Error while parsing output of message" :: msg.toString ::
+              msg :: next.pos.longString.split("\n").toList
+          ))
+        }
+      } catch {
+        case NegParCountException(line) => notifyMaster(Messages.SolverError(
+          "Illegal negative count of parentheses triggered by message" ::
+            msg.toString :: "Output: " :: line.split("\n").toList
         ))
       }
-    } catch {
-      case NegParCountException(line) => notifyMaster(Messages.SolverError(
-        "Illegal negative count of parentheses triggered by message" ::
-        msg.toString :: "Output: " :: line.split("\n").toList
-      ))
     }
   }
 
+  /** Reads on the solver process output based on the message it
+    * receives. Does not parse success. */
+  trait SmtsReaderNoSuccess extends SmtsReaderSuccess {
+    import Messages.{ToSmtsMsg,QueryMsg}
+    override protected def readMsg(msg: ToSmtsMsg) = {
+      logMsg(msg) ; msg match {
+        case _: QueryMsg => super.readMsg(msg)
+        case _ => ()
+      }
+    }
+  }
 
   /** Exception thrown when the difference between open and closed
     * parentheses is negative. */
   protected case class NegParCountException(lines: String) extends Exception(
     "Illegal negative count of parentheses in lines " + lines + "."
   )
+
 }

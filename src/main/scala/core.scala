@@ -27,7 +27,7 @@ import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
   * @tparam Expr The user's type for the data structure.
   * @tparam Ident The user's type for identifiers.
   * @tparam Sort The user's type for sorts. */
-trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
+trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
 
   // |=====| User specified printer and parsers for the expression structure.
@@ -44,6 +44,55 @@ trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
   val smt2Ident: PackratParser[Ident]
   /** Parser for sorts. */
   val smt2Sort: PackratParser[Sort]
+
+
+  // |=====| Solver info.
+
+  /** Extended by all the solver classes. */
+  sealed trait SolverInfo {
+    import Messages.{ToSmtsMsg,SetOption}
+
+    /** The command launching the solver. */
+    val command: String
+    /** If true Smts will parse for success. */
+    val success: Boolean
+    /** If true model generation will be activated in the solver. */
+    val models: Boolean
+    /** If true unsat core generation will be activated in the solver. */
+    val unsatCores: Boolean
+    /** Commands the solver will always be launched with. */
+    val initWith: List[ToSmtsMsg]
+    /** Commands to write when launching the solver. */
+    lazy val startMsgs: List[ToSmtsMsg] = {
+      val withCores =
+        if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
+        else initWith
+      val withModels =
+        if (models) SetOption(":produce-models true") :: withCores
+        else withCores
+      if (success) SetOption(":print-success true") :: withModels else withModels
+    }
+  }
+
+  /** Solver information class for Z3. */
+  class Z3(
+    val success: Boolean = false,
+    val models: Boolean = true,
+    val unsatCores: Boolean = false,
+    val command: String = "z3 -in -smt2",
+    val initWith: List[Messages.ToSmtsMsg]
+  ) extends SolverInfo { override def toString = "z3" }
+
+  /** Solver information class for CVC4. Unsat cores deactivated. */
+  class CVC4(
+    val success: Boolean = false,
+    val models: Boolean = true,
+    val command: String = "cvc4 -q -lang smt",
+    val initWith: List[Messages.ToSmtsMsg]
+  ) extends SolverInfo {
+    val unsatCores: Boolean = false
+    override def toString = "cvc4"
+  }
 
 
   // |=====| Data structures.
@@ -72,19 +121,22 @@ trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
 
     /** Extended by all the messages Smts can receive. */
-    sealed trait ToSmtsMsg
+    sealed trait ToSmtsMsg extends SmtsMsg
 
     /** Extended by all the messages producing a result. */
-    sealed trait QueryMsg
+    sealed trait QueryMsg extends SmtsMsg
 
     /** Dummy message for testing purposes. */
     case class DummyMsg(msg: String) extends ToSmtsMsg
 
-    /** Kills the underlying solver process. */
+    /** Kills the underlying solver process and the Smts actors handling it. */
     object KillSolver extends ToSmtsMsg
 
     /** Restarts the underlying solver process. */
-    object Restart extends ToSmtsMsg
+    object Restart extends ToSmtsMsg {
+      import java.io.BufferedReader
+      protected[smts] def br: Option[BufferedReader] = None
+    }
 
     /** Set-option command. */
     case class SetOption(option: String) extends ToSmtsMsg
@@ -183,15 +235,19 @@ trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     /** Extended by all the messages Smts can send. */
     sealed trait FromSmtsMsg extends SmtsMsg
 
+    /** Success message. Internal, never actually sent to anyone. */
+    case object Success extends FromSmtsMsg { override def toString() = "Success" }
+    /** Unknown result. */
+    case object Unknown extends FromSmtsMsg { override def toString() = "Unknown" }
+    /** Unsupported result. */
+    case object Unsupported extends FromSmtsMsg { override def toString() = "Unsupported" }
+    /** Time out. */
+    case object Timeout extends FromSmtsMsg { override def toString() = "Timeout" }
+
     /** Sat result. */
     case object Sat extends FromSmtsMsg { override def toString() = "Sat" }
     /** Unsat result. */
     case object Unsat extends FromSmtsMsg { override def toString() = "Unsat" }
-    /** Unknown result. */
-    case object Unknown extends FromSmtsMsg { override def toString() = "Unknown" }
-
-    /** Time out. */
-    case object Timeout extends FromSmtsMsg { override def toString() = "Timeout" }
 
     /** Get-model result.
       * @param model The model asked by a previous get-model message. */
@@ -216,13 +272,6 @@ trait Smts[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     case class SolverError(val msgs: Traversable[String]) extends FromSmtsMsg {
       override def toString() = "Solver error: {" + msgs + "}"
     }
-
-
-    /** Extended by all messages exchanged internally. */
-    sealed trait InternalMsg extends SmtsMsg
-
-    /** Success message. */
-    object Success extends InternalMsg
   }
 
 }
