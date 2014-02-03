@@ -38,9 +38,9 @@ with SmtsParsers[Expr,Ident,Logic] {
       solverInfo.startMsgs foreach (msg => writeMsg(msg))
 
     /** Restarts the solver. */
-    protected def restart: Unit
+    def restart: Unit
     /** Kills the solver. */
-    protected def killSolver: Unit
+    def killSolver: Unit
 
     /** Creates a new solver process. */
     protected def createSolverProcess = (new ProcessBuilder(
@@ -75,14 +75,15 @@ with SmtsParsers[Expr,Ident,Logic] {
     )
     /** Actual writer on the solver process input. */
     private var _solverWriter = getSolverWriter
-    def solverWriter = _solverWriter
+    protected def solverWriter = _solverWriter
 
-    protected def restart = {
+    def restart = {
+      killSolver
       solverProcess = createSolverProcess
       _solverWriter = getSolverWriter
       notifyReader(getSolverReader)
     }
-    protected def killSolver = { solverProcess.destroy }
+    def killSolver = solverProcess.destroy
   }
 
   /** Writes on the solver process input. Only forwards the query

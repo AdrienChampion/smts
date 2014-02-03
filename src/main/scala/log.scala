@@ -28,7 +28,7 @@ trait SmtsLog[Expr,Ident,Sort] extends SmtsIO[Expr,Ident,Sort] {
     import Messages.ToSmtsMsg
 
     /** Path to the logging file. */
-    val logFilePath: String
+    def logFilePath: String
     /** '''BufferedWriter''' on the logging file. */
     val logBW = new BufferedWriter(new FileWriter(logFilePath))
 

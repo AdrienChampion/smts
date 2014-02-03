@@ -23,7 +23,7 @@ import java.io.Writer
 import scala.language.reflectiveCalls
 import scala.collection.mutable.OpenHashMap
 
-import smts._
+import smts.SmtsActors
 
 /** Contains a simple data structures with printers and parsers for testing Smts. */
 object ExprStructure {
@@ -408,10 +408,6 @@ with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
     }
   }
 
-
-  sealed trait ParseResult
-  case class Succ(val msg: Messages.ToSmtsMsg)
-  case class Fail(val msg: String)
 
   def parseCommand(s: String) =
     phrase(commandParser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))) match {

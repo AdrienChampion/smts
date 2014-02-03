@@ -23,7 +23,6 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
 
   /** This trait contains all the standard SMT lib 2 parsers used in Smts. */
   trait SmtLibParsers {
-
     import Messages._
 
     /** Parses an smt lib 2 identifiers (used mostly for unsat cores). */

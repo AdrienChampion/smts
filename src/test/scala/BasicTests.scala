@@ -41,7 +41,8 @@ object BasicTests extends Verboser {
 
     def test = {
       verbln("Creating a SmtLib parser with String as Expr.")
-      val smtLibParser = new SmtLibParsers[String, String, String] {
+
+      object SmtsSmtLibParser extends SmtsParsers[String,String,String] {
         def expr2Smt(s: String, writer: Writer) = ()
         def ident2Smt(s: String, writer: Writer) = ()
         def sort2Smt(s: String, writer: Writer) = ()
@@ -56,30 +57,48 @@ object BasicTests extends Verboser {
           "0"
         }
         lazy val smt2Sort: PackratParser[String] = { "Bool" | "Int" | "Real" }
-        def parse(s: String) =
-          phrase(resultParser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))) match {
+
+        val smtLibParser = new SmtLibParsers {
+          def parse(s: String) = phrase(resultParser)(
+            new PackratReader(
+              new scala.util.parsing.input.CharSequenceReader(s)
+            )
+          ) match {
             case Success(result,next) => result
-            case Failure(msg,next) => { verbln("  Failure:" + msg) ;  println(next.pos.longString) }
-            case Error(msg,next) => { verbln("  Error:" + msg) ;  println(next.pos.longString) }
+            case Failure(msg,next) =>
+              { verbln("  Failure:" + msg) ;  println(next.pos.longString) }
+            case Error(msg,next) =>
+              { verbln("  Error:" + msg) ;  println(next.pos.longString) }
           }
-        def identParse(s: String) =
-          phrase(identParser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))) match {
+
+          def identParse(s: String) = phrase(identParser)(
+            new PackratReader(
+              new scala.util.parsing.input.CharSequenceReader(s)
+            )
+          ) match {
             case Success(result,next) => result
-            case Failure(msg,next) => { verbln("  Failure:" + msg) ;  println(next.pos.longString) }
-            case Error(msg,next) => { verbln("  Error:" + msg) ;  println(next.pos.longString) }
+            case Failure(msg,next) =>
+              { verbln("  Failure:" + msg) ;  println(next.pos.longString) }
+            case Error(msg,next) =>
+              { verbln("  Error:" + msg) ;  println(next.pos.longString) }
           }
+        }
       }
+
       verbln("Creation successful.")
+      val smtsParser = SmtsSmtLibParser.smtLibParser
+
       def testParsingIdent(toParse: String) = {
         verbln("Attempting to parse identifier [" + toParse + "]")
-        val result = smtLibParser.identParse(toParse)
+        val result = smtsParser.identParse(toParse)
         verbln("  Result: " + result)
       }
       def testParsing(toParse: String) = {
         verbln("Attempting to parse [" + toParse + "]")
-        val result = smtLibParser.parse(toParse)
+        val result = smtsParser.parse(toParse)
         verbln("  Result: " + result)
       }
+
       title2("Ident parsing.")
       testParsingIdent("^ont50342")
       testParsingIdent("@toto")

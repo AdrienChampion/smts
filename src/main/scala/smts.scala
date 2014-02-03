@@ -26,30 +26,53 @@ import akka.actor._
 trait SmtsFactory[Expr,Ident,Sort]
 extends SmtsActors[Expr,Ident,Sort] {
 
-  /** Factory object for Smts.
-    * */
-  // object SmtsActor {
-  //   import akka.actor._
+  /** Factory object for Smts. */
+  object Smts {
+    import akka.actor._
 
-  //   private var instanceCount = 0
+    /** The number of instances created so far. */
+    private var _instanceCount = 0
+    /** The number of instances created so far. */
+    def instanceCount = _instanceCount
 
-  //   def apply(
-  //     master: ActorRef, solverInfo: SolverInfo, freeRestarts: Boolean = false
-  //   ) = 
-  // }
+    /** Creates a new Smts instance.
+      * @param client The actor this solver will interact with.
+      * @param solverInfo The solver information and configuration.
+      * @param freeRestars If true two solver processes will be used to provide
+      * seemingly free restarts by swapping solvers (default '''false''').
+      * @param log Allows to specify a file path for logging (default '''None'''). */
+    def apply(
+      client: ActorRef, solverInfo: SolverInfo,
+      freeRestarts: Boolean = false, log: Option[String] = None
+    ) = Props(
+      new Master(client,solverInfo,log)
+    )
+  }
 
-  /** Master with only one solver process. */
-  class Master(
+  /** Master with only one solver process.
+    * @param log Allows to specify a file path for logging. */
+  class Master private[smts](
     protected[this] val client: ActorRef,
-    protected[this] val solverInfo: SolverInfo
+    protected[this] val solverInfo: SolverInfo,
+    val log: Option[String]
   ) extends MasterActor with SmtsWriterSimple {
 
-    protected[this] val reader =
-      if (solverInfo.success) context.actorOf(Props(
-        new ReaderSuccess(self,getSolverReader)
-      ), name = "reader") else context.actorOf(Props(
-        new ReaderNoSuccess(self,getSolverReader)
-      ), name = "reader")
+    protected[this] val reader = context.actorOf(Props(
+      (solverInfo.success,log) match {
+        case (true,None) => new ReaderSuccess(self,getSolverReader)
+        case (false,None) => new ReaderNoSuccess(self,getSolverReader)
+        case (true,Some(path)) =>
+          new ReaderSuccess(self,getSolverReader) with ReaderLog {
+            def logFilePath = path
+          }
+        case (false,Some(path)) =>
+          new ReaderNoSuccess(self,getSolverReader) with ReaderLog {
+            def logFilePath = path
+          }
+      }
+    ), name = "reader")
+
+    override def preStart = initSolver
 
     def receive = {
       case msg => handleMessage(msg)
@@ -57,7 +80,7 @@ extends SmtsActors[Expr,Ident,Sort] {
   }
 
   /** Reader with success parsing. */
-  class ReaderSuccess(
+  class ReaderSuccess private[smts](
     protected[this] val master: ActorRef,
     protected[this] var solverReader: BufferedReader
   ) extends ReaderActor with SmtsReaderSuccess {
@@ -67,7 +90,7 @@ extends SmtsActors[Expr,Ident,Sort] {
   }
 
   /** Reader without success parsing. */
-  class ReaderNoSuccess(
+  class ReaderNoSuccess private[smts](
     /** The '''MasterActor''' this actor interacts with. */
     _master: ActorRef,
     /** Actual reader on the solver process output. */

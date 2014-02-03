@@ -360,7 +360,6 @@ object IOTest extends Verboser with OptionHandler with Animator {
   Solver.kill
 
   def workOnBench(filePath: String): Unit = {
-    // verbln("Working on file " + filePath)
 
     printBenchName(filePath)
     BenchStats.updateGlobalStatus
@@ -436,9 +435,9 @@ object IOTest extends Verboser with OptionHandler with Animator {
     logln("; Failed:    " + BenchStats.Current.failed)
     logln("; Error:     " + BenchStats.Current.error)
     logln("; Total:     " + BenchStats.Current.total)
-    logln("; Different: " + BenchStats.Current.different)
+    logln("; Timeout:   " + BenchStats.Current.timeout)
     logln("; Unknown:   " + BenchStats.Current.unknown)
-    logln("; Timeout: " + BenchStats.Current.timeout)
+    logln("; Different: " + BenchStats.Current.different)
     logln
     logln
     Logger.flush

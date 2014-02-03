@@ -54,16 +54,24 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
     /** The command launching the solver. */
     val command: String
-    /** If true Smts will parse for success. */
+    /** If true Smts will parse for success (default '''false'''). */
     val success: Boolean
-    /** If true model generation will be activated in the solver. */
+    /** If true model generation will be activated in the solver
+      * (default '''false'''). */
     val models: Boolean
-    /** If true unsat core generation will be activated in the solver. */
+    /** If true unsat core generation will be activated in the solver
+      * (default '''false'''). */
     val unsatCores: Boolean
-    /** Commands the solver will always be launched with. */
+    /** Allows to specify a timeout in milliseconds (default '''None'''). */
+    val timeout: Option[Int]
+    /** Allows to specify a timeout in milliseconds for each query to the solver
+      * (default '''None'''. */
+    val timeoutQuery: Option[Int]
+    /** Commands the solver will always be launched with (default '''Nil'''). */
     val initWith: List[ToSmtsMsg]
+
     /** Commands to write when launching the solver. */
-    lazy val startMsgs: List[ToSmtsMsg] = {
+    val startMsgs: List[ToSmtsMsg] = {
       val withCores =
         if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
         else initWith
@@ -72,24 +80,56 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
         else withCores
       if (success) SetOption(":print-success true") :: withModels else withModels
     }
+
+    /** Converts an integer in milliseconds to its string representation in
+      * seconds. */
+    def millis2secs(millis: Int) = {
+      val milliString = millis.toString
+      milliString.size match {
+        case n if n > 3 =>
+          milliString.take(n-3) + "." + milliString.drop(n-3)
+        case n =>
+          "0." + ("0" * (n-3)) + milliString
+      }
+    }
   }
 
   /** Solver information class for Z3. */
   class Z3(
     val success: Boolean = false,
-    val models: Boolean = true,
+    val models: Boolean = false,
     val unsatCores: Boolean = false,
-    val command: String = "z3 -in -smt2",
-    val initWith: List[Messages.ToSmtsMsg]
-  ) extends SolverInfo { override def toString = "z3" }
+    val baseCommand: String = "z3 -in -smt2",
+    val initWith: List[Messages.ToSmtsMsg] = Nil,
+    val timeout: Option[Int] = None,
+    val timeoutQuery: Option[Int] = None
+  ) extends SolverInfo {
+    val command = baseCommand + ( timeout match {
+      case None => ""
+      case Some(to) => " -T:" + millis2secs(to)
+    }) + (timeoutQuery match {
+      case None => ""
+      case Some(to) => " -t:" + millis2secs(to)
+    })
+    override def toString = "z3"
+  }
 
   /** Solver information class for CVC4. Unsat cores deactivated. */
   class CVC4(
     val success: Boolean = false,
-    val models: Boolean = true,
-    val command: String = "cvc4 -q -lang smt",
-    val initWith: List[Messages.ToSmtsMsg]
+    val models: Boolean = false,
+    val baseCommand: String = "cvc4 -q -lang smt",
+    val initWith: List[Messages.ToSmtsMsg] = Nil,
+    val timeout: Option[Int] = None,
+    val timeoutQuery: Option[Int] = None
   ) extends SolverInfo {
+    val command = baseCommand + ( timeout match {
+      case None => ""
+      case Some(to) => " -tlimit:" + to
+    }) + (timeoutQuery match {
+      case None => ""
+      case Some(to) => " -t:" + to
+    })
     val unsatCores: Boolean = false
     override def toString = "cvc4"
   }
