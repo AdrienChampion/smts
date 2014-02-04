@@ -31,7 +31,7 @@ with SmtsParsers[Expr,Ident,Logic] {
     import Messages.ToSmtsMsg
 
     /** The solver information. */
-    protected val solverInfo: SolverInfo
+    protected def solverInfo: SolverInfo
 
     /** Initializes the solver by sending the start messages. */
     protected def initSolver =
@@ -56,7 +56,9 @@ with SmtsParsers[Expr,Ident,Logic] {
     protected def notifyReader(br: BufferedReader): Unit
 
     /** Writes the command the message corresponds to. */
-    protected def writeMsg(msg: ToSmtsMsg): Unit = writeMsg(msg,solverWriter)
+    protected def writeMsg(msg: ToSmtsMsg): Unit = {
+      writeMsg(msg,solverWriter) ; notifyReader(msg)
+    }
   }
 
   /** Writer with a single solver process. */
@@ -82,6 +84,7 @@ with SmtsParsers[Expr,Ident,Logic] {
       solverProcess = createSolverProcess
       _solverWriter = getSolverWriter
       notifyReader(getSolverReader)
+      initSolver
     }
     def killSolver = solverProcess.destroy
   }
@@ -121,9 +124,11 @@ with SmtsParsers[Expr,Ident,Logic] {
     protected def logMsg(msg: ToSmtsMsg) = ()
     /** Logs the result of a message if logging is activated. */
     protected def logResultLine(line: String) = ()
+    /** Logs the result of a message if logging is activated. */
+    protected def logSpace = ()
 
     /** Notifies the reader's master on its reading. */
-    protected def notifyMaster(msg: SmtsMsg)
+    protected def notifyMaster(msg: FromSmtsMsg)
 
     /** Returns the number of open parentheses minus the number of
       * closed parentheses of a string. */
@@ -139,11 +144,14 @@ with SmtsParsers[Expr,Ident,Logic] {
 
     /** Reads on the solver reader and parses it. */
     protected def readMsg(msg: ToSmtsMsg) = {
+      logMsg(msg)
+
       val line = {
         var temp = solverReader.readLine
         while (temp == "") temp = solverReader.readLine
         temp
       }
+      logResultLine(line)
 
       // Internal loop to get all the lines.
       @tailrec
@@ -162,17 +170,15 @@ with SmtsParsers[Expr,Ident,Logic] {
 
       try {
         val text = msg match {
-          case Messages.KillSolver if line == null => { logResultLine("success") ; "success" }
+          case Messages.KillSolver if line == null =>
+            { logResultLine("success") ; "success" }
           case _ => loop()
         }
         logResultLine("")
         phrase(getParser(msg))(
           new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))
         ) match {
-          case Success(smtsMsg,_) => smtsMsg match {
-            case Messages.Success => ()
-            case _ => notifyMaster(smtsMsg)
-          }
+          case Success(smtsMsg,_) => notifyMaster(smtsMsg)
           case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(
             "Error while parsing output of message" :: msg.toString ::
               msg :: next.pos.longString.split("\n").toList

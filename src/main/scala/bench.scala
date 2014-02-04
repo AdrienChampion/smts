@@ -18,7 +18,10 @@
 
 package smts
 
+import java.io._
+
 import scala.annotation.tailrec
+import sys.process.stringSeqToProcess
 
 import smts.utils._
 
@@ -27,10 +30,14 @@ package object bench {
 
   /** Used for the users to benchmark their expression structure, and the solvers. */
   trait SmtsBenchTrait[Expr,Ident,Sort]
-  extends smts.SmtsIO[Expr,Ident,Sort] {
+  extends smts.SmtsIO[Expr,Ident,Sort] with SmtsLog[Expr,Ident,Sort] {
 
-    trait SmtsBench
-    extends App with NiceBench {
+    /** This function will be called at the end of each benchmark
+      * and is intended to clean hash consigns. */
+    def clearConsigned = ()
+
+    trait SmtsBench extends App with NiceBench {
+
 
       def run() = {
 
@@ -63,15 +70,37 @@ package object bench {
         space
         verbln("Creating Smts object.")
 
-        val smts = new SmtsWriterSimple {
-          import Messages._
+        trait BenchSmts extends SmtsWriterSimple
+        with SmtsReaderSuccess with SmtLibCommandParsers {
+          import Messages.{SolverError,ToSmtsMsg,FromSmtsMsg,Unknown,Timeout}
+
+          /** Potential results of parsing a command (see '''parseCommand'''). */
+          sealed trait ParseResult
+          /** Parsing was successful. */
+          case class Succ(val msg: ToSmtsMsg)
+          /** Parsing failed. */
+          case class Fail(val msg: String)
+
+          protected def solverInfo = Options.solver match {
+            case "z3" => Z3(success = true, timeoutQuery = Options.timeout)
+            case "cvc4" => CVC4(success = true, timeoutQuery = Options.timeout)
+            case s => {
+              verbln("Unexpected solver " + s + ".") ; space ; sys exit -1
+            }
+          }
+          def command = solverInfo.command
+
           protected def notifyReader(msg: ToSmtsMsg) = readMsg(msg)
-          protected def notifyMaster(msg: ToSmtsMsg) = msg match {
+          protected def notifyReader(br: BufferedReader) = solverReader = br
+
+          protected var solverReader: BufferedReader = getSolverReader
+
+          protected def notifyMaster(msg: FromSmtsMsg) = msg match {
             case SolverError(expl) => {
               BenchStats.Current.errorInc
               logln("; Solver error:")
               expl foreach (e => logln(";     " + e))
-              Logger.flush
+              logFlush()
             }
             case Unknown => {
               BenchStats.Current.unknownInc ; BenchStats.Current.successInc
@@ -81,26 +110,52 @@ package object bench {
             }
             case _ => BenchStats.Current.successInc
           }
-        } with SmtsReaderSuccess with SmtLibCommandParsers
+
+          /** Parses a command from the input string. */
+          def parseCommand(s: String) = phrase(commandParser)(
+            new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))
+          ) match {
+            case Success(result,next) => Succ(result)
+            case Failure(msg,next) => Fail(msg + "\n" + next.pos.longString)
+            case Error(msg,next) => Fail(msg + "\n" + next.pos.longString)
+          }
+
+          def apply(msg: ToSmtsMsg) = writeMsg(msg)
+
+          initSolver
+        }
+
+        val benchSmts = Options.log match {
+          case None => new BenchSmts {}
+          case Some(file) => new BenchSmts {
+            override protected def logMsg(msg: Messages.ToSmtsMsg) =
+              writeMsg(msg,Logger.writer)
+            override protected def logResultLine(line: String) = {
+              Logger.writer write "; " ; Logger.writer write line ;
+              Logger.writer write "\n"
+            }
+            override protected def logSpace = Logger.writer write "\n"
+          }
+        }
 
         initAnim()
 
         logln("; Smts bench edition.")
         logln(";   arguments: " + args.toList)
-        logln("; Solver command: " + command)
-        logln
-        logln
-        Logger.flush
+        logln("; Solver command: " + benchSmts.command)
+        logn()
+        logn()
+        logFlush()
 
         Timer.start
         Options.dirs foreach (arg => {
           exploreAndDo(arg,workOnBench)
         })
         Timer.stop
-        Solver.kill
+        benchSmts.killSolver
 
         outitAnim()
-        logln
+        logn()
         logln("Done in    " + Timer.time + " ms.")
         logln("Success:   " + BenchStats.success)
         logln("Failed:    " + BenchStats.failed)
@@ -108,38 +163,36 @@ package object bench {
         logln("Timeout:   " + BenchStats.timeout)
         logln("Unknown:   " + BenchStats.unknown)
         logln("Different: " + BenchStats.different)
-        flush
+        logFlush()
         space
         sys exit 0
-      }
 
-      def workOnBench(filePath: String): Unit = {
+        def workOnBench(filePath: String): Unit = {
 
-        printBenchName(filePath)
-        BenchStats.updateGlobalStatus
-        logln("; Working on file " + filePath)
-        smts(smts.Messages.SetOption(":print-success true"))
-        val br = new BufferedReader(new FileReader(filePath))
+          printBenchName(filePath)
+          BenchStats.updateGlobalStatus
+          logln("; Working on file " + filePath)
+          val br = new BufferedReader(new FileReader(filePath))
 
-        val lnr = new LineNumberReader(new FileReader(new File(filePath)))
-        lnr.skip(Long.MaxValue)
-        val lineCount = lnr.getLineNumber()
+          val lnr = new LineNumberReader(new FileReader(new File(filePath)))
+          lnr.skip(Long.MaxValue)
+          val lineCount = lnr.getLineNumber()
 
-        @tailrec
-        def loop(line: String = "", lines: Int = 0): Unit = {
-          BenchStats.updateFileStatus(lines,lineCount)
-          val nuLine = br.readLine
-          if (nuLine != null) {
-            val cleanLine = if (line == "") nuLine.trim else line + " " + nuLine.trim
-            val op = cleanLine count (c => c == '(')
-            val cp = cleanLine count (c => c == ')')
-            if (op == cp) {
-              smts parseCommand cleanLine match {
-                case smts.Succ(msg) => {
+          @tailrec
+          def loop(line: String = "", lines: Int = 0): Unit = {
+            BenchStats.updateFileStatus(lines,lineCount)
+            BenchStats.updateGlobalStatus
+            val nuLine = br.readLine
+            if (nuLine != null) {
+              val cleanLine = if (line == "") nuLine.trim else line + " " + nuLine.trim
+              val op = cleanLine count (c => c == '(')
+              val cp = cleanLine count (c => c == ')')
+              if (op == cp) benchSmts parseCommand cleanLine match {
+                case benchSmts.Succ(msg) => {
                   val sw = new StringWriter()
-                  smts.writeMsg(msg,sw)
+                  benchSmts.writeMsg(msg,sw)
                   if ((cleanLine + "\n").replaceAll("\\s+","") == sw.toString.replaceAll("\\s+","")) {
-                    try { smts(msg) ; true } catch {
+                    try { benchSmts(msg) ; true } catch {
                       case e: java.io.IOException => {
                         BenchStats.Current.timeoutInc
                         BenchStats.Current.successInc
@@ -152,9 +205,9 @@ package object bench {
                     logln(";   " + cleanLine)
                     log(sw.toString)
                     logln("")
-                    Logger.flush
+                    logFlush()
                     BenchStats.Current.differentInc
-                    try { smts(msg) ; true } catch {
+                    try { benchSmts(msg) ; true } catch {
                       case e: java.io.IOException => {
                         BenchStats.Current.timeoutInc
                         BenchStats.Current.successInc
@@ -164,36 +217,36 @@ package object bench {
                     loop("", lines + 1)
                   }
                 }
-                case smts.Fail(msg) => {
+                case benchSmts.Fail(msg) => {
                   logln("; Parse failed on line:")
                   logln(";   " + cleanLine)
                   logln("; Error message:")
                   logln("; " + msg)
-                  logln("")
+                  logn()
                   BenchStats.Current.failedInc
                   loop("", lines + 1)
                 }
-              }
-            } else loop(cleanLine, lines + 1)
-          } else ()
-        }
+              } else loop(cleanLine, lines + 1)
+            } else ()
+          }
 
-        smts.clearConsigned
-        loop()
-        Solver.restart
-        BenchStats.Current.reset
-        logln
-        logln("; Success:   " + BenchStats.Current.success)
-        logln("; Failed:    " + BenchStats.Current.failed)
-        logln("; Error:     " + BenchStats.Current.error)
-        logln("; Total:     " + BenchStats.Current.total)
-        logln("; Timeout:   " + BenchStats.Current.timeout)
-        logln("; Unknown:   " + BenchStats.Current.unknown)
-        logln("; Different: " + BenchStats.Current.different)
-        logln
-        logln
-        Logger.flush
-        BenchStats.fileCountIncrement
+          loop()
+          benchSmts.restart
+          BenchStats.Current.reset
+          logn()
+          logln("; Success:   " + BenchStats.Current.success)
+          logln("; Failed:    " + BenchStats.Current.failed)
+          logln("; Error:     " + BenchStats.Current.error)
+          logln("; Total:     " + BenchStats.Current.total)
+          logln("; Timeout:   " + BenchStats.Current.timeout)
+          logln("; Unknown:   " + BenchStats.Current.unknown)
+          logln("; Different: " + BenchStats.Current.different)
+          logn()
+          logn()
+          logFlush()
+          BenchStats.fileCountIncrement
+          clearConsigned
+        }
       }
 
       def exploreAndDo(filePath: String, work: String => Unit): Unit = {
@@ -205,141 +258,6 @@ package object bench {
         else if (filePath endsWith ".smt2") work(filePath)
         else ()
       }
-
-
-
-      /** Potential results of parsing a command (see '''parseCommand'''). */
-      sealed trait ParseResult
-      /** Parsing was successful. */
-      case class Succ(val msg: Messages.ToSmtsMsg)
-      /** Parsing failed. */
-      case class Fail(val msg: String)
-
-      /** Parses a command from the input string. */
-      def parseCommand(s: String) = phrase(commandParser)(
-        new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))
-      ) match {
-        case Success(result,next) => Succ(result)
-        case Failure(msg,next) => Fail(msg + "\n" + next.pos.longString)
-        case Error(msg,next) => Fail(msg + "\n" + next.pos.longString)
-      }
-
-
-      // |=====| Log things.
-
-      object Logger {
-        private var _writer: BufferedWriter = null
-        def writer = _writer
-        def flush = _writer.flush
-        def newFile(filePath: String) =
-          _writer = { logging = true ; new BufferedWriter(new FileWriter(filePath)) }
-        private var logging = false
-        def log(s: String) = if (logging) Logger.writer write s
-        def logln(s: String) = if (logging) { log(s) ; log("\n") }
-        def logln() = log("\n")
-      }
-      def log(s: String) = Logger.log(s)
-      def logln(s: String) = Logger.logln(s)
-      def logln() = Logger.logln()
-
-
-      // |=====| Benchmark statistics (performs the printing).
-
-      object BenchStats {
-        def updateFileStatus(lines: Int, lineCount: Int) = {
-          printFileStatus()
-          printFileProgress(lines,lineCount)
-        }
-
-        object Current {
-          private var _cSuccess = 0
-          def success = _cSuccess
-          def successInc = {
-            _cSuccess += 1
-            _success += 1
-          }
-
-          private var _cFailed = 0
-          def failed = _cFailed
-          def failedInc = {
-            _cFailed += 1
-            _failed += 1
-          }
-
-          private var _cError = 0
-          def error = _cError
-          def errorInc = {
-            _cError += 1
-            _error += 1
-          }
-
-          private var _cTimeout = 0
-          def timeout = _cTimeout
-          def timeoutInc = {
-            _cTimeout += 1
-            _timeout += 1
-          }
-
-          private var _cDifferent = 0
-          def different = _cDifferent
-          def differentInc = {
-            _cDifferent += 1
-            _different += 1
-          }
-
-          private var _cUnknown = 0
-          def unknown = _cUnknown
-          def unknownInc = {
-            _cUnknown += 1
-            _unknown += 1
-          }
-          def reset = {
-            _cSuccess = 0 ; _cDifferent = 0 ; _cFailed = 0 ;
-            _cError = 0 ; _cTimeout = 0 ; _cUnknown = 0
-          }
-          def total = success + failed + error
-        }
-
-        private var _currentFile = ""
-        def currentFile = _currentFile
-        def currentFile_= (newFile: String) = _currentFile = newFile
-
-        private var _time: Long = 0
-        def start = _time = System.currentTimeMillis
-        def stop = _time -= System.currentTimeMillis
-        def time = _time
-
-        def updateGlobalStatus = {
-          printGlobalProgress(fileCount,totalFileCount)
-          printGeneralStatus()
-          printBenchNumber(fileCount, totalFileCount)
-        }
-        private var _fileCount: Int = 0
-        def fileCount = _fileCount
-        def fileCountIncrement = {
-          _fileCount += 1
-          updateGlobalStatus
-        }
-        private var _totalFileCount: Int = 0
-        def totalFileCount = _totalFileCount
-        def totalFileCount_= (n: Int) = {
-          _totalFileCount = n
-        }
-
-        private var _success: Int = 0
-        def success = _success
-        private var _failed: Int = 0
-        def failed = _failed
-        private var _error: Int = 0
-        def error = _error
-        private var _different: Int = 0
-        def different = _different
-        private var _timeout: Int = 0
-        def timeout = _timeout
-        private var _unknown: Int = 0
-        def unknown = _unknown
-        def total = success + failed + error
-      }
     }
 
   }
@@ -347,6 +265,143 @@ package object bench {
 
   /** Uses the traits from '''smts.utils''' to pretty print and handle options. */
   trait NiceBench extends Verboser with OptionHandler with Animator {
+
+
+    // |=====| Log things.
+
+    object Logger {
+      private var _writer: BufferedWriter = null
+      def writer = _writer
+      def newFile(filePath: String) = {
+        _logging = true
+        _writer = new BufferedWriter(new FileWriter(filePath))
+      }
+      private var _logging = false
+      def logging = _logging
+    }
+
+    val log: String => Unit =
+      if (Logger.logging) { s => Logger.writer write s }
+      else { s => () }
+    val logln: String => Unit =
+      if (Logger.logging) { s => Logger.writer write (s + "\n") }
+      else { s => () }
+    val logn: () => Unit =
+      if (Logger.logging) { ()=> Logger.writer write "\n" }
+      else { () => () }
+    val logFlush: () => Unit =
+      if (Logger.logging) { () => Logger.writer.flush }
+      else { () => () }
+
+
+    // |=====| Benchmark statistics (performs the printing).
+
+    object BenchStats {
+      def updateFileStatus(lines: Int, lineCount: Int) = {
+        printFileStatus()
+        printFileProgress(lines,lineCount)
+      }
+
+      object Current {
+        private var _cSuccess = 0
+        def success = _cSuccess
+        def successInc = {
+          _cSuccess += 1
+          _success += 1
+        }
+
+        private var _cFailed = 0
+        def failed = _cFailed
+        def failedInc = {
+          _cFailed += 1
+          _failed += 1
+        }
+
+        private var _cError = 0
+        def error = _cError
+        def errorInc = {
+          _cError += 1
+          _error += 1
+        }
+
+        private var _cTimeout = 0
+        def timeout = _cTimeout
+        def timeoutInc = {
+          _cTimeout += 1
+          _timeout += 1
+        }
+
+        private var _cDifferent = 0
+        def different = _cDifferent
+        def differentInc = {
+          _cDifferent += 1
+          _different += 1
+        }
+
+        private var _cUnknown = 0
+        def unknown = _cUnknown
+        def unknownInc = {
+          _cUnknown += 1
+          _unknown += 1
+        }
+        def reset = {
+          _cSuccess = 0 ; _cDifferent = 0 ; _cFailed = 0 ;
+          _cError = 0 ; _cTimeout = 0 ; _cUnknown = 0
+        }
+        def total = success + failed + error
+      }
+
+      private var _currentFile = ""
+      def currentFile = _currentFile
+      def currentFile_= (newFile: String) = _currentFile = newFile
+
+      private var _time: Long = 0
+      def start = _time = System.currentTimeMillis
+      def stop = _time -= System.currentTimeMillis
+      def time = _time
+
+      def updateGlobalStatus = {
+        printGlobalProgress(fileCount,totalFileCount)
+        printGeneralStatus()
+        printBenchNumber(fileCount, totalFileCount)
+      }
+      private var _fileCount: Int = 0
+      def fileCount = _fileCount
+      def fileCountIncrement = {
+        _fileCount += 1
+        updateGlobalStatus
+      }
+      private var _totalFileCount: Int = 0
+      def totalFileCount = _totalFileCount
+      def totalFileCount_= (n: Int) = {
+        _totalFileCount = n
+      }
+
+      private var _success: Int = 0
+      def success = _success
+      private var _failed: Int = 0
+      def failed = _failed
+      private var _error: Int = 0
+      def error = _error
+      private var _different: Int = 0
+      def different = _different
+      private var _timeout: Int = 0
+      def timeout = _timeout
+      private var _unknown: Int = 0
+      def unknown = _unknown
+      def total = success + failed + error
+    }
+
+    // |=====| Timer to time things.
+
+    object Timer {
+      private var _timer: Long = 0
+      def time = _timer
+      def now = System.currentTimeMillis - _timer
+      def start = _timer = System.currentTimeMillis
+      def stop = _timer = System.currentTimeMillis - _timer
+    }
+
 
     // |=====| Option handling.
 
@@ -401,7 +456,7 @@ package object bench {
         Options.log = optionValue(s)
       }, " activates logging." :: Nil) ::
       ("--solver=", { s: String => optionValue(s) match {
-        case "z3" | "mathsat" | "cvc4" => Options.solver = s
+        case "z3" | "mathsat" | "cvc4" => Options.solver = optionValue(s)
         case string => {
           optionError("unexpected solver value \"" + string + "\".")
           printHelp() ; sys exit -1
@@ -409,7 +464,7 @@ package object bench {
       }}, " the solver to use: z3, mathsat or cvc4 (default z3)." :: Nil) ::
       ("--timeout=", { s: String =>
         Options.timeout = optionValue(s).toInt
-      }, " sets a timeout for each query to the solver, in seconds." :: Nil) ::
+      }, " sets a timeout for each query to the solver, in milliseconds." :: Nil) ::
       Nil
     }
 

@@ -53,9 +53,11 @@ extends SmtsActors[Expr,Ident,Sort] {
     * @param log Allows to specify a file path for logging. */
   class Master private[smts](
     protected[this] val client: ActorRef,
-    protected[this] val solverInfo: SolverInfo,
+    solverInformation: SolverInfo,
     val log: Option[String]
   ) extends MasterActor with SmtsWriterSimple {
+
+    protected def solverInfo = solverInformation
 
     protected[this] val reader = context.actorOf(Props(
       (solverInfo.success,log) match {

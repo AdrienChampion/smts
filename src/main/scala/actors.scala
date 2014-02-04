@@ -39,6 +39,8 @@ with SmtsLog[Expr,Ident,Sort] {
     protected def notifyReader(msg: ToSmtsMsg) = reader ! msg
     protected def notifyReader(br: BufferedReader) = reader ! br
 
+    override def preStart = initSolver
+
     /** Function handling the messages from the user and the reader. */
     protected def handleMessage(msg: Any) = msg match {
       case Restart => restart
@@ -54,12 +56,12 @@ with SmtsLog[Expr,Ident,Sort] {
 
   /** Actor hidden from the user reading and parsing the solver output. */
   trait ReaderActor extends Actor with SmtsReaderSuccess {
-    import Messages.{SmtsMsg,ToSmtsMsg}
+    import Messages.{FromSmtsMsg,ToSmtsMsg,SuccessMsg}
 
     /** The '''MasterActor''' this actor interacts with. */
     protected val master: ActorRef
 
-    def notifyMaster(msg: SmtsMsg) = master ! msg
+    def notifyMaster(msg: FromSmtsMsg) = if (msg != SuccessMsg) master ! msg
 
     def handleMessage(msg: Any) = msg match {
       case br: BufferedReader => solverReader = br

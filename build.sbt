@@ -30,6 +30,11 @@ javaOptions ++= Seq("-Xmx1024M","-Xms512M")
 //                       "-optimise", "-encoding", "utf8")
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
- 
+
+exportJars := true
+
+// seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
+
 libraryDependencies +=
   "com.typesafe.akka" %% "akka-actor" % "2.2.3"
+//  "commons-lang" % "commons-lang" % "2.6"

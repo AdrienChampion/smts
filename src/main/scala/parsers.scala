@@ -25,7 +25,7 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
   trait SmtLibParsers {
     import Messages._
 
-    /** Parses an smt lib 2 identifiers (used mostly for unsat cores). */
+    /** Parses an smt lib 2 identifier (used mostly for unsat cores). */
     lazy val identParser: PackratParser[String] = {
       """[a-zA-Z+\-\/\*=%?!\.$_~&\^<>@][a-zA-Z0-9+\-\/\*=%?!\.$_~&\^<>@]*""".r ^^ {
         case id => id
@@ -95,7 +95,7 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
 
     /** Parses the string "success". */
     lazy val successParser: PackratParser[FromSmtsMsg] = "success" ^^ {
-      case _ => Messages.Success
+      case _ => Messages.SuccessMsg
     }
     /** Parser used for check-sat results. */
     lazy val checkSatParser: PackratParser[FromSmtsMsg] = {

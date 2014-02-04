@@ -16,26 +16,11 @@
  *  If not, see <http://www.gnu.org/licenses/>.                              *
 \* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-package smts
+package smts.test
 
-import java.io.{Writer,BufferedWriter,FileWriter}
+/** Tests basic functionalities of the Smts SMT solver wrapper. */
+object Bench extends ExprSmts.SmtsBench {
 
-/** Provides the '''ReaderLog''' trait. */
-trait SmtsLog[Expr,Ident,Sort] extends SmtsIO[Expr,Ident,Sort] {
+  run()
 
-  /** Reader should extend this trait to activate logging. */
-  trait ReaderLog extends SmtsReaderSuccess with SmtLibPrinters {
-    import Messages.ToSmtsMsg
-
-    /** Path to the logging file. */
-    def logFilePath: String
-    /** '''BufferedWriter''' on the logging file. */
-    val logBW = new BufferedWriter(new FileWriter(logFilePath))
-
-    override protected def logMsg(msg: ToSmtsMsg) = writeMsg(msg,logBW)
-    override protected def logResultLine(line: String) = {
-      logBW write "; " ; logBW write line ; logBW write "\n"
-    }
-    override protected def logSpace = logBW write "\n"
-  }
 }

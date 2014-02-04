@@ -86,16 +86,14 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     def millis2secs(millis: Int) = {
       val milliString = millis.toString
       milliString.size match {
-        case n if n > 3 =>
-          milliString.take(n-3) + "." + milliString.drop(n-3)
-        case n =>
-          "0." + ("0" * (n-3)) + milliString
+        case n if n > 3 => milliString.take(n-3)
+        case n => "0." + ("0" * (n-3)) + milliString
       }
     }
   }
 
   /** Solver information class for Z3. */
-  class Z3(
+  case class Z3(
     val success: Boolean = false,
     val models: Boolean = false,
     val unsatCores: Boolean = false,
@@ -115,7 +113,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
   }
 
   /** Solver information class for CVC4. Unsat cores deactivated. */
-  class CVC4(
+  case class CVC4(
     val success: Boolean = false,
     val models: Boolean = false,
     val baseCommand: String = "cvc4 -q -lang smt",
@@ -276,7 +274,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     sealed trait FromSmtsMsg extends SmtsMsg
 
     /** Success message. Internal, never actually sent to anyone. */
-    case object Success extends FromSmtsMsg { override def toString() = "Success" }
+    case object SuccessMsg extends FromSmtsMsg { override def toString() = "Success" }
     /** Unknown result. */
     case object Unknown extends FromSmtsMsg { override def toString() = "Unknown" }
     /** Unsupported result. */

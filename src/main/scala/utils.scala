@@ -60,7 +60,7 @@ package object utils {
     val helpHeader: List[String] = Nil
 
     def printHelp(text: String = "") = {
-      helpHeader foreach optionPrint(_)
+      helpHeader foreach (optionPrint(_))
       if (text != "") optionPrint(text)
       optionPrint("\033[1mMandatory arguments:\033[0m")
       myArguments foreach (arg => arg._3 match {

@@ -333,89 +333,84 @@ object ExprStructure {
 
 }
 
-trait SmtsTest
-extends SmtLibCommandParsers[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort]
-with SmtLibPrinters[ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort] {
+object ExprSmts extends smts.bench.SmtsBenchTrait[
+  ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort
+] {
 
   import ExprStructure._
 
   def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
   def ident2Smt(ident: Ident, w: Writer) = ident writeTo w
   def sort2Smt(sort: Sort, w: Writer) = sort writeTo w
-  lazy val smt2Expr: PackratParser[Expr] = testExprParser
-  lazy val smt2Ident: PackratParser[Ident] = identExprParser
-  lazy val smt2Sort: PackratParser[Sort] = sortParser
+  lazy val smt2Expr: PackratParser[Expr] = Parsers.testExprParser
+  lazy val smt2Ident: PackratParser[Ident] = Parsers.identExprParser
+  lazy val smt2Sort: PackratParser[Sort] = Parsers.sortParser
+
+  override def clearConsigned = ConsignedExpr.clearAll
 
   // |=====| Parsers.
 
-  lazy val bindingParser: PackratParser[(Ident,Expr)] = {
-    "(" ~> identExprParser ~ exprParser <~ ")" ^^ { case id~expr => (id,expr) } |
-    "(" ~> identExprParser ~ arithParser <~ ")" ^^ { case id~expr => (id,expr) }
-  }
-  lazy val funAppParser: PackratParser[FunApp] = {
-    "(" ~> identExprParser ~ rep((anythingParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
-  }
-  lazy val testExprParser: PackratParser[Expr] = exprParser
-  lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
-  lazy val realParserAsPair: PackratParser[(String,String)] = {
-    intParser ~ "." ~ intParser ^^ { case int~_~dec => (int + dec, "1" + ("0" * dec.length)) } |
-    intParser <~ "." ^^ { case int => (int,"") } |
-    "." ~> intParser ^^ { case dec => (dec,"1" + ("0" * dec.length)) }
-  }
-  lazy val anythingParser: PackratParser[Expr] = { arithParser | exprParser }
+  object Parsers extends SmtLibParsers with SmtLibCommandParsers {
 
-
-  lazy val exprParser: PackratParser[BoolExpr] = {
-    "true" ^^ { case _ => True } |
-    "false" ^^ { case _ => False } |
-    "(" ~ "not" ~> exprParser <~ ")" ^^ { case kid => Not(kid) } |
-    "(" ~ "and" ~> rep(exprParser) <~ ")" ^^ { case kids => AndN(kids) } |
-    "(" ~ "or" ~> rep(exprParser) <~ ")" ^^ { case kids => OrN(kids) } |
-    "(" ~ "forall" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Forall(vars,e) } |
-    "(" ~ "exists" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Exists(vars,e) } |
-    "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
-    "(" ~ "=>" ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Impl(lhs,rhs) } |
-    "(" ~ "=" ~> rep(exprParser) <~ ")" ^^ { case kids => Eq(kids) } |
-    "(" ~ "=" ~> rep(arithParser) <~ ")" ^^ { case kids => Eq(kids) } |
-    "(" ~ "<"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Lt(lhs,rhs) } |
-    "(" ~ "<=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Le(lhs,rhs) } |
-    "(" ~ ">=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Ge(lhs,rhs) } |
-    "(" ~ ">"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Gt(lhs,rhs) } |
-    funAppParser | identExprParser
-  }
-
-  lazy val arithParser: PackratParser[ArithExpr] = {
-    realParserAsPair ^^ { case pair => RatConst.fromDec(pair._1,pair._2) } |
-    bigIntParser ^^ { case value => IntConst(value) } |
-    "(" ~ "/" ~> bigIntParser ~ bigIntParser <~ ")" ^^ { case num~den => RatConst(num,den) } |
-    "(" ~ "+" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Plus(lhs,rhs) } |
-    "(" ~ "-" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Minus(lhs,rhs) } |
-    "(" ~ "-" ~> arithParser <~ ")" ^^ { case kid => UMinus(kid) } |
-    "(" ~ "*" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Mult(lhs,rhs) } |
-    "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
-    funAppParser | identExprParser
-  }
-
-  lazy val bigIntParser: PackratParser[BigInt] = {
-    """[1-9][0-9]*""".r ^^ { case num => BigInt(num) } |
-    "0" ^^ { case _ => BigInt("0") }
-  }
-
-  lazy val sortParser: PackratParser[Sort] = {
-    identParser ^^ { case id => IdentSort(id) } |
-    "(" ~> identParser ~ rep1(sortParser) <~ ")" ^^ {
-      case id~sorts => NestedSort(id,sorts)
+    lazy val bindingParser: PackratParser[(Ident,Expr)] = {
+      "(" ~> identExprParser ~ exprParser <~ ")" ^^ { case id~expr => (id,expr) } |
+      "(" ~> identExprParser ~ arithParser <~ ")" ^^ { case id~expr => (id,expr) }
     }
-  }
+    lazy val funAppParser: PackratParser[FunApp] = {
+      "(" ~> identExprParser ~ rep((anythingParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
+    }
+    lazy val testExprParser: PackratParser[Expr] = exprParser
+    lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
+    lazy val realParserAsPair: PackratParser[(String,String)] = {
+      intParser ~ "." ~ intParser ^^ { case int~_~dec => (int + dec, "1" + ("0" * dec.length)) } |
+      intParser <~ "." ^^ { case int => (int,"") } |
+      "." ~> intParser ^^ { case dec => (dec,"1" + ("0" * dec.length)) }
+    }
+    lazy val anythingParser: PackratParser[Expr] = { arithParser | exprParser }
 
 
-  def parseCommand(s: String) =
-    phrase(commandParser)(new PackratReader(new scala.util.parsing.input.CharSequenceReader(s))) match {
-      case Success(result,next) => Succ(result)
-      case Failure(msg,next) => Fail(msg + "\n" + next.pos.longString)
-      case Error(msg,next) => Fail(msg + "\n" + next.pos.longString)
+    lazy val exprParser: PackratParser[BoolExpr] = {
+      "true" ^^ { case _ => True } |
+      "false" ^^ { case _ => False } |
+      "(" ~ "not" ~> exprParser <~ ")" ^^ { case kid => Not(kid) } |
+      "(" ~ "and" ~> rep(exprParser) <~ ")" ^^ { case kids => AndN(kids) } |
+      "(" ~ "or" ~> rep(exprParser) <~ ")" ^^ { case kids => OrN(kids) } |
+      "(" ~ "forall" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Forall(vars,e) } |
+      "(" ~ "exists" ~ "(" ~> rep1(paramParser) ~ ")" ~ smt2Expr <~ ")" ^^ { case vars~_~e => Exists(vars,e) } |
+      "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
+      "(" ~ "=>" ~> exprParser ~ exprParser <~ ")" ^^ { case lhs~rhs => Impl(lhs,rhs) } |
+      "(" ~ "=" ~> rep(exprParser) <~ ")" ^^ { case kids => Eq(kids) } |
+      "(" ~ "=" ~> rep(arithParser) <~ ")" ^^ { case kids => Eq(kids) } |
+      "(" ~ "<"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Lt(lhs,rhs) } |
+      "(" ~ "<=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Le(lhs,rhs) } |
+      "(" ~ ">=" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Ge(lhs,rhs) } |
+      "(" ~ ">"  ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Gt(lhs,rhs) } |
+      funAppParser | identExprParser
     }
 
-  def clearConsigned = ConsignedExpr.clearAll
+    lazy val arithParser: PackratParser[ArithExpr] = {
+      realParserAsPair ^^ { case pair => RatConst.fromDec(pair._1,pair._2) } |
+      bigIntParser ^^ { case value => IntConst(value) } |
+      "(" ~ "/" ~> bigIntParser ~ bigIntParser <~ ")" ^^ { case num~den => RatConst(num,den) } |
+      "(" ~ "+" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Plus(lhs,rhs) } |
+      "(" ~ "-" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Minus(lhs,rhs) } |
+      "(" ~ "-" ~> arithParser <~ ")" ^^ { case kid => UMinus(kid) } |
+      "(" ~ "*" ~> arithParser ~ arithParser <~ ")" ^^ { case lhs~rhs => Mult(lhs,rhs) } |
+      "(" ~ "let"  ~ "(" ~> rep1(bindingParser) ~ ")" ~ exprParser <~ ")" ^^ { case bindings~_~expr => Let(bindings,expr) } |
+      funAppParser | identExprParser
+    }
 
+    lazy val bigIntParser: PackratParser[BigInt] = {
+      """[1-9][0-9]*""".r ^^ { case num => BigInt(num) } |
+      "0" ^^ { case _ => BigInt("0") }
+    }
+
+    lazy val sortParser: PackratParser[Sort] = {
+      identParser ^^ { case id => IdentSort(id) } |
+      "(" ~> identParser ~ rep1(sortParser) <~ ")" ^^ {
+        case id~sorts => NestedSort(id,sorts)
+      }
+    }
+
+  }
 }
