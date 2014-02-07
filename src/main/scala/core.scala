@@ -112,6 +112,20 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     override def toString = "z3"
   }
 
+  /** Solver information class for mathsat. */
+  case class Mathsat(
+    val success: Boolean = false,
+    val models: Boolean = false,
+    val unsatCores: Boolean = false,
+    val baseCommand: String = "mathsat",
+    val initWith: List[Messages.ToSmtsMsg] = Nil,
+    val timeout: Option[Int] = None,
+    val timeoutQuery: Option[Int] = None
+  ) extends SolverInfo {
+    val command = baseCommand
+    override def toString = "mathsat"
+  }
+
   /** Solver information class for CVC4. Unsat cores deactivated. */
   case class CVC4(
     val success: Boolean = false,

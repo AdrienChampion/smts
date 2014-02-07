@@ -59,8 +59,10 @@ package object utils {
     val unexpectedOptionThrowsError = true
     val helpHeader: List[String] = Nil
 
+    def printHelpHeader(text: String = "") =
+    { helpHeader foreach (optionPrint(_)) ; printHelp(text) }
+
     def printHelp(text: String = "") = {
-      helpHeader foreach (optionPrint(_))
       if (text != "") optionPrint(text)
       optionPrint("\033[1mMandatory arguments:\033[0m")
       myArguments foreach (arg => arg._3 match {
@@ -89,6 +91,7 @@ package object utils {
             case Some((_,optDo,_)) => optDo(arg)
             case None if unexpectedOptionThrowsError => {
               optionError("unexpected argument \"" + arg + "\".")
+              printHelp("")
               sys exit -1
             }
             case None => ()

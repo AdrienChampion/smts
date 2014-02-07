@@ -36,9 +36,10 @@ package object bench {
       * and is intended to clean hash consigns. */
     def clearConsigned = ()
 
+    /** Launches the benchmarks with function '''run'''. */
     trait SmtsBench extends App with NiceBench {
 
-
+      /** Launches the benchmarks. */
       def run() = {
 
         // Setting the options of the run.
@@ -84,6 +85,7 @@ package object bench {
           protected def solverInfo = Options.solver match {
             case "z3" => Z3(success = true, timeoutQuery = Options.timeout)
             case "cvc4" => CVC4(success = true, timeoutQuery = Options.timeout)
+            case "mathsat" => Mathsat(success = true, timeoutQuery = Options.timeout)
             case s => {
               verbln("Unexpected solver " + s + ".") ; space ; sys exit -1
             }
@@ -266,7 +268,6 @@ package object bench {
   /** Uses the traits from '''smts.utils''' to pretty print and handle options. */
   trait NiceBench extends Verboser with OptionHandler with Animator {
 
-
     // |=====| Log things.
 
     object Logger {
@@ -447,24 +448,24 @@ package object bench {
 
     val myOptions = {
       ("-h", { s: String => {
-        printHelp() ; sys exit 0
+        printHelpHeader() ; sys exit 0
       } }, "     prints this message." :: Nil) ::
       ("--help", { s: String => {
-        printHelp() ; sys exit 0 }
+        printHelpHeader() ; sys exit 0 }
       }, " also prints this message." :: Nil) ::
       ("--log=", { s: String =>
         Options.log = optionValue(s)
-      }, " activates logging." :: Nil) ::
+      }, "<file> activates logging to the specified file." :: Nil) ::
       ("--solver=", { s: String => optionValue(s) match {
         case "z3" | "mathsat" | "cvc4" => Options.solver = optionValue(s)
         case string => {
           optionError("unexpected solver value \"" + string + "\".")
           printHelp() ; sys exit -1
         }
-      }}, " the solver to use: z3, mathsat or cvc4 (default z3)." :: Nil) ::
+      }}, "<string> the solver to use: z3, mathsat or cvc4 (default z3)." :: Nil) ::
       ("--timeout=", { s: String =>
         Options.timeout = optionValue(s).toInt
-      }, " sets a timeout for each query to the solver, in milliseconds." :: Nil) ::
+      }, "<int> sets a timeout for each query to the solver, in milliseconds." :: Nil) ::
       Nil
     }
 
@@ -529,6 +530,5 @@ package object bench {
     val fileProgressAnim = new KawaiiAnimation()
     def printFileProgress(current: Int, max: Int) =
       animLine(6,current,max,fileProgressAnim)
-
   }
 }
