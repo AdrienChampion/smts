@@ -56,8 +56,14 @@ with SmtsParsers[Expr,Ident,Logic] {
     protected def notifyReader(br: BufferedReader): Unit
 
     /** Writes the command the message corresponds to. */
-    protected def writeMsg(msg: ToSmtsMsg): Unit = {
+    protected def writeMsg(msg: ToSmtsMsg): Unit = try {
       writeMsg(msg,solverWriter) ; notifyReader(msg)
+    } catch {
+      case e: IOException => {
+        // notifyMaster(SolverClosed)
+        println("Triggered by message " + msg + ".")
+        throw e
+      }
     }
   }
 

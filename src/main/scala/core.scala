@@ -130,17 +130,17 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
   case class CVC4(
     val success: Boolean = false,
     val models: Boolean = false,
-    val baseCommand: String = "cvc4 -q -lang smt",
+    val baseCommand: String = "cvc4 -q --lang=smt",
     val initWith: List[Messages.ToSmtsMsg] = Nil,
     val timeout: Option[Int] = None,
     val timeoutQuery: Option[Int] = None
   ) extends SolverInfo {
     val command = baseCommand + ( timeout match {
       case None => ""
-      case Some(to) => " -tlimit:" + to
+      case Some(to) => " --tlimit=" + to
     }) + (timeoutQuery match {
       case None => ""
-      case Some(to) => " -t:" + to
+      case Some(to) => " --tlimit-per=" + to
     })
     val unsatCores: Boolean = false
     override def toString = "cvc4"
@@ -293,6 +293,8 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     case object Unknown extends FromSmtsMsg { override def toString() = "Unknown" }
     /** Unsupported result. */
     case object Unsupported extends FromSmtsMsg { override def toString() = "Unsupported" }
+    /** Unsupported result. */
+    case object SolverClosed extends FromSmtsMsg { override def toString() = "Solver closed" }
     /** Time out. */
     case object Timeout extends FromSmtsMsg { override def toString() = "Timeout" }
 

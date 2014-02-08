@@ -73,7 +73,9 @@ package object bench {
 
         trait BenchSmts extends SmtsWriterSimple
         with SmtsReaderSuccess with SmtLibCommandParsers {
-          import Messages.{SolverError,ToSmtsMsg,FromSmtsMsg,Unknown,Timeout}
+          import Messages.{
+            SolverError,ToSmtsMsg,FromSmtsMsg,Unknown,Timeout,SolverClosed
+          }
 
           /** Potential results of parsing a command (see '''parseCommand'''). */
           sealed trait ParseResult
@@ -123,8 +125,6 @@ package object bench {
           }
 
           def apply(msg: ToSmtsMsg) = writeMsg(msg)
-
-          initSolver
         }
 
         val benchSmts = Options.log match {
@@ -133,21 +133,21 @@ package object bench {
             override protected def logMsg(msg: Messages.ToSmtsMsg) =
               writeMsg(msg,Logger.writer)
             override protected def logResultLine(line: String) = {
-              Logger.writer write "; " ; Logger.writer write line ;
-              Logger.writer write "\n"
+              log("; ") ; logln(line)
             }
-            override protected def logSpace = Logger.writer write "\n"
+            override protected def logSpace = logln("")
+
+            logln("; Smts bench edition.")
+            logln(";   arguments: " + args.toList)
+            logln("; Solver command: " + command)
+            logn()
+            logn()
+            logFlush()
+            initSolver
           }
         }
 
         initAnim()
-
-        logln("; Smts bench edition.")
-        logln(";   arguments: " + args.toList)
-        logln("; Solver command: " + benchSmts.command)
-        logn()
-        logn()
-        logFlush()
 
         Timer.start
         Options.dirs foreach (arg => {
@@ -281,16 +281,16 @@ package object bench {
       def logging = _logging
     }
 
-    val log: String => Unit =
+    lazy val log: String => Unit =
       if (Logger.logging) { s => Logger.writer write s }
       else { s => () }
-    val logln: String => Unit =
+    lazy val logln: String => Unit =
       if (Logger.logging) { s => Logger.writer write (s + "\n") }
       else { s => () }
-    val logn: () => Unit =
+    lazy val logn: () => Unit =
       if (Logger.logging) { ()=> Logger.writer write "\n" }
       else { () => () }
-    val logFlush: () => Unit =
+    lazy val logFlush: () => Unit =
       if (Logger.logging) { () => Logger.writer.flush }
       else { () => () }
 
