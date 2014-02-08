@@ -61,7 +61,7 @@ with SmtsParsers[Expr,Ident,Logic] {
     } catch {
       case e: IOException => {
         // notifyMaster(SolverClosed)
-        println("Triggered by message " + msg + ".")
+        // println("Triggered by message " + msg + ".")
         throw e
       }
     }
