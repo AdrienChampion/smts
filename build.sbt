@@ -18,22 +18,15 @@
 
 name := "smts"
 
-version := "0.0"
+version := "0.1"
 
 scalaVersion := "2.10.3"
 
 javaOptions ++= Seq("-Xmx1024M","-Xms512M")
 
-// append -deprecation to the options passed to the Scala compiler
-// scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked",
-//                       "-language:postfixOps",
-//                       "-optimise", "-encoding", "utf8")
-
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
 
 exportJars := true
-
-// seq(com.github.retronym.SbtOneJar.oneJarSettings: _*)
 
 libraryDependencies +=
   "com.typesafe.akka" %% "akka-actor" % "2.2.3"

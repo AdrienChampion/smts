@@ -18,7 +18,7 @@
 
 package smts
 
-import java.io.{Writer}
+import java.io.Writer
 
 import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
 
@@ -29,6 +29,8 @@ import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
   * @tparam Sort The user's type for sorts. */
 trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
+  def printMaster(s: String) = println("[\033[31;1mMaster\033[0m] " + s)
+  def printReader(s: String) = println("[\033[33;1mReader\033[0m] " + s)
 
   // |=====| User specified printer and parsers for the expression structure.
 

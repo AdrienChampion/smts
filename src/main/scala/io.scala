@@ -158,6 +158,7 @@ with SmtsParsers[Expr,Ident,Logic] {
         temp
       }
       logResultLine(line)
+      printReader("Line: " + line)
 
       // Internal loop to get all the lines.
       @tailrec
@@ -168,6 +169,7 @@ with SmtsParsers[Expr,Ident,Logic] {
         case 0 => text
         case n if n >= 0 => {
           val newLine = solverReader.readLine
+          printReader("Line: " + newLine)
           logResultLine(newLine)
           loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
         }
@@ -205,8 +207,8 @@ with SmtsParsers[Expr,Ident,Logic] {
     import Messages.{ToSmtsMsg,QueryMsg}
     override protected def readMsg(msg: ToSmtsMsg) = {
       logMsg(msg) ; msg match {
-        case _: QueryMsg => super.readMsg(msg)
-        case _ => ()
+        case _: QueryMsg => { printReader("Query, reading answer.") ; super.readMsg(msg) }
+        case _ => { printReader("Not a query, doing nothing.") ; () }
       }
     }
   }

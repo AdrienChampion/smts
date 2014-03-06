@@ -54,6 +54,7 @@ object ExprStructure {
   /** Identifier class. */
   class Ident private(val id: String) extends BoolExpr with ArithExpr {
     def writeTo(w: Writer) = w write id
+    override def toString() = id
   }
   object Ident extends ConsignedExpr[String, Ident] {
     def apply(id: String) = consign.getOrElseUpdate(id, new Ident(id))
@@ -67,6 +68,7 @@ object ExprStructure {
       args foreach (arg => { w write " " ; arg writeTo w })
       w write ")"
     }
+    override def toString() = "fun(" +  id + args.foldLeft("")((s,e) => s + " " + e) + ")"
   }
   object FunApp extends ConsignedExpr[(Ident, Traversable[Expr]),FunApp] {
     def apply(id: Ident, args: Traversable[Expr]) = consign.getOrElseUpdate((id,args), new FunApp(id,args))
@@ -77,15 +79,22 @@ object ExprStructure {
   sealed trait BoolExpr extends Expr
 
   /** True object. */
-  object True extends BoolExpr { def writeTo(w: Writer) = w write "true" }
+  object True extends BoolExpr {
+    def writeTo(w: Writer) = w write "true"
+    override def toString() = "true"
+  }
   /** False object. */
-  object False extends BoolExpr { def writeTo(w: Writer) = w write "false" }
+  object False extends BoolExpr {
+    def writeTo(w: Writer) = w write "false"
+    override def toString() = "false"
+  }
 
   /** Not class. */
   class Not private(val kid: BoolExpr) extends BoolExpr {
     def writeTo(w: Writer) = {
       w write "(not " ; kid writeTo w ; w write ")"
     }
+    override def toString() = "Not(" + kid + ")"
   }
   object Not extends ConsignedExpr[BoolExpr,Not] {
     def apply(kid: BoolExpr): BoolExpr = kid match {
@@ -102,6 +111,7 @@ object ExprStructure {
       kids foreach (kid => { w write " " ; kid writeTo w })
       w write ")"
     }
+    override def toString() = "And(" + kids.head + kids.tail.foldLeft("")((s,e) => s + " " + e) + ")"
   }
   object AndN extends ConsignedExpr[Traversable[BoolExpr], AndN] {
     def apply(kids: Traversable[BoolExpr]): BoolExpr = kids.size match {
@@ -119,6 +129,7 @@ object ExprStructure {
       kids foreach (kid => { w write " " ; kid writeTo w })
       w write ")"
     }
+    override def toString() = "Or(" + kids.head + kids.tail.foldLeft("")((s,e) => s + " " + e) + ")"
   }
   object OrN extends ConsignedExpr[Traversable[BoolExpr], OrN] {
     def apply(kids: Traversable[BoolExpr]): BoolExpr = kids.size match {
@@ -134,6 +145,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(=> " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "Impl(" + lhs + " " + rhs + ")"
   }
   object Impl extends ConsignedExpr[(Expr,Expr), Impl] {
     def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Impl(lhs,rhs))
@@ -145,6 +157,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(=" ; kids foreach (kid => { w write " " ; kid writeTo w }) ; w write ")"
     }
+    override def toString() = "Eq(" + kids.head + kids.tail.foldLeft("")((s,e) => s + " " + e) + ")"
   }
   object Eq extends ConsignedExpr[Traversable[Expr], Eq] {
     def apply(kids: Traversable[Expr]) = kids.size match {
@@ -159,6 +172,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(< " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "Lt(" + lhs + " " + rhs + ")"
   }
   object Lt extends ConsignedExpr[(Expr,Expr), Lt] {
     def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Lt(lhs,rhs))
@@ -170,6 +184,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(<= " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "Le(" + lhs + " " + rhs + ")"
   }
   object Le extends ConsignedExpr[(Expr,Expr), Le] {
     def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Le(lhs,rhs))
@@ -181,6 +196,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(>= " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "Ge(" + lhs + " " + rhs + ")"
   }
   object Ge extends ConsignedExpr[(Expr,Expr), Ge] {
     def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Ge(lhs,rhs))
@@ -192,6 +208,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(> " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "Gt(" + lhs + " " + rhs + ")"
   }
   object Gt extends ConsignedExpr[(Expr,Expr), Gt] {
     def apply(lhs: Expr, rhs: Expr) = consign.getOrElseUpdate((lhs,rhs), new Gt(lhs,rhs))
@@ -205,6 +222,7 @@ object ExprStructure {
       vars foreach (v => { w write " (" ; v._1 writeTo w ; w write " " ; v._2 writeTo w ; w write ")" })
       w write " ) " ; expr writeTo w ; w write ")"
     }
+    override def toString() = "forall(" + vars.head + vars.tail.foldLeft("")((s,e) => s + " " + e) + ")(" + expr + ")"
   }
   object Forall extends ConsignedExpr[(Traversable[(Ident,Sort)],Expr), Forall] {
     def apply(vars: Traversable[(Ident,Sort)], expr: Expr) = consign.getOrElseUpdate((vars,expr), new Forall(vars,expr))
@@ -217,6 +235,7 @@ object ExprStructure {
       vars foreach (v => { w write " (" ; v._1 writeTo w ; w write " " ; v._2 writeTo w ; w write ")" })
       w write " ) " ; expr writeTo w ; w write ")"
     }
+    override def toString() = "exists(" + vars.head + vars.tail.foldLeft("")((s,e) => s + " " + e) + ")(" + expr + ")"
   }
   object Exists extends ConsignedExpr[(Traversable[(Ident,Sort)],Expr), Exists] {
     def apply(vars: Traversable[(Ident,Sort)], expr: Expr) = consign.getOrElseUpdate((vars,expr), new Exists(vars,expr))
@@ -230,6 +249,7 @@ object ExprStructure {
       bindings foreach (binding => { w write " (" ; binding._1 writeTo w ; binding._2 writeTo w ; w write ")" })
       w write " ) " ; expr writeTo w ; w write ")"
     }
+    override def toString() = "let(" + bindings.head + bindings.tail.foldLeft("")((s,e) => s + " " + e) + ")(" + expr + ")"
   }
   object Let extends ConsignedExpr[(Traversable[(Ident,Expr)],Expr), Let] {
     def apply(bindings: Traversable[(Ident,Expr)], expr: Expr) = consign.getOrElseUpdate(
@@ -245,6 +265,7 @@ object ExprStructure {
   /** Integer constant. */
   class IntConst(val value: BigInt) extends ArithExpr {
     def writeTo(w: Writer) = w write value.toString
+    override def toString() = value.toString
   }
   object IntConst extends ConsignedExpr[BigInt, IntConst] {
     def apply(value: BigInt) = consign.getOrElseUpdate(value, new IntConst(value))
@@ -256,6 +277,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(/ " ; w write num.toString ; w write " " ; w write den.toString ; w write ")"
     }
+    override def toString() = num + "/" + den
   }
   object RatConst extends ConsignedExpr[(BigInt,BigInt), RatConst] {
     def apply(num: BigInt, den: BigInt) = consign.getOrElseUpdate((num,den), new RatConst(num,den))
@@ -271,6 +293,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(+ " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "+(" + lhs + " " + rhs + ")"
   }
   object Plus extends ConsignedExpr[(ArithExpr,ArithExpr), Plus] {
     def apply(lhs: ArithExpr, rhs: ArithExpr) = consign.getOrElseUpdate((lhs,rhs), new Plus(lhs,rhs))
@@ -282,6 +305,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(- " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "-(" + lhs + " " + rhs + ")"
   }
   object Minus extends ConsignedExpr[(ArithExpr,ArithExpr), Minus] {
     def apply(lhs: ArithExpr, rhs: ArithExpr) = consign.getOrElseUpdate((lhs,rhs), new Minus(lhs,rhs))
@@ -293,6 +317,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(- " ; kid writeTo w ; w write ")"
     }
+    override def toString() = "-(" + kid + ")"
   }
   object UMinus extends ConsignedExpr[ArithExpr, UMinus] {
     def apply(kid: ArithExpr) = consign.getOrElseUpdate(kid, new UMinus(kid))
@@ -304,6 +329,7 @@ object ExprStructure {
     def writeTo(w: Writer) = {
       w write "(* " ; lhs writeTo w ; w write " " ; rhs writeTo w ; w write ")"
     }
+    override def toString() = "*(" + lhs + " " + rhs + ")"
   }
   object Mult extends ConsignedExpr[(ArithExpr,ArithExpr), Mult] {
     def apply(lhs: ArithExpr, rhs: ArithExpr) = consign.getOrElseUpdate((lhs,rhs), new Mult(lhs,rhs))
@@ -313,6 +339,12 @@ object ExprStructure {
   // |=====| Sort structure.
 
   sealed trait Sort { def writeTo(w: Writer): Unit }
+  object IntSort extends Sort {
+    def writeTo(w: Writer) = w write "Int"
+  }
+  object BoolSort extends Sort {
+    def writeTo(w: Writer) = w write "Bool"
+  }
   class IdentSort(val id: String) extends Sort {
     def writeTo(w: Writer) = w write id
   }
@@ -333,10 +365,10 @@ object ExprStructure {
 
 }
 
-object ExprSmts extends smts.bench.SmtsBenchTrait[
-  ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort
-] {
 
+trait SmtParsers extends smts.SmtsParsers[
+  ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort
+]{
   import ExprStructure._
 
   def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
@@ -346,7 +378,7 @@ object ExprSmts extends smts.bench.SmtsBenchTrait[
   lazy val smt2Ident: PackratParser[Ident] = Parsers.identExprParser
   lazy val smt2Sort: PackratParser[Sort] = Parsers.sortParser
 
-  override def clearConsigned = ConsignedExpr.clearAll
+  def clearConsigned = ConsignedExpr.clearAll
 
   // |=====| Parsers.
 
@@ -413,4 +445,10 @@ object ExprSmts extends smts.bench.SmtsBenchTrait[
     }
 
   }
+}
+
+object ExprSmts extends smts.bench.SmtsBenchTrait[
+  ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort
+] with SmtParsers {
+  override def clearConsigned() = clearConsigned()
 }
