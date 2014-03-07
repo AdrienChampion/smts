@@ -341,12 +341,15 @@ object ExprStructure {
   sealed trait Sort { def writeTo(w: Writer): Unit }
   object IntSort extends Sort {
     def writeTo(w: Writer) = w write "Int"
+    override def toString() = "Int"
   }
   object BoolSort extends Sort {
     def writeTo(w: Writer) = w write "Bool"
+    override def toString() = "Bool"
   }
   class IdentSort(val id: String) extends Sort {
     def writeTo(w: Writer) = w write id
+    override def toString() = id
   }
   object IdentSort extends ConsignedExpr[String,IdentSort] {
     def apply(id: String) = consign.getOrElseUpdate(id, new IdentSort(id))
@@ -358,6 +361,7 @@ object ExprStructure {
         w write " " ; sort writeTo w
       }) ; w write ")"
     }
+    override def toString() = id
   }
   object NestedSort extends ConsignedExpr[(String, Seq[Sort]), NestedSort] {
     def apply(id: String, sorts: Seq[Sort]) = consign.getOrElseUpdate((id,sorts), new NestedSort(id,sorts))

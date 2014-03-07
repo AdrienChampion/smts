@@ -97,6 +97,7 @@ package object sorts {
     val asString: String
     /** Prints the sort in the '''Writer'''. */
     def writeTo(w: Writer) = w write asString
+    override def toString() = asString
  }
 
   /** Bool sort. */

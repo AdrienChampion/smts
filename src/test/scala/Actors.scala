@@ -30,6 +30,8 @@ object Actors extends smts.SmtsFactory[
 
   import ExprStructure._
 
+  def title(s: String) = println("|=====| \033[31;1m" + s + "\033[0m |=====|")
+
   /** Preventing Akka from loading dead letters. */
   val customConf = ConfigFactory.parseString(
 """
@@ -44,60 +46,72 @@ akka {
 
   val actorSystem = ActorSystem("Smts",ConfigFactory.load(customConf))
 
-  println("Creating client for testing smts.")
+  println
+  title("Initialization.")
+  print("Creating client for testing smts... ")
   val client = actorSystem.actorOf(Props(new SolverBenchs {
     def act = {
-      case "start" => println("Starting.")
       case solver: ActorRef => {
-        println ; println("Starting the first simple test.")
-        simpleTest1(solver)
-        // killSystem
+        checksatTest(
+          () => { restart() ; println ; modelTest(
+            () => { restart() ; println ; unsatCoreTest(
+              () => { println ; killSystem() }
+            )}
+          )}
+        )
       }
     }
     def receive = act
     def stop = { println("Stopping.") ; context stop self }
   }), name = "client")
-  println("Done.")
 
-  println("Creating a smts instance with z3 as the solver.")
+  toKill += client
+  println("Done")
+
+  print("Creating a smts instance with z3 as the solver... ")
   val solver = actorSystem.actorOf(
-    Smts(client, Z3(), log = Some("toto.log")), name = "solver"
+    Smts(client, Z3(models=true, unsatCores=true), log = Some("toto.log")), name = "solver"
   )
-  println("Done.")
 
-  println("Sending start message to client.")
-  client ! "start"
-  println("Done.")
+  toKill += solver
+  println("Done")
 
-  println("Sending solver to client.")
+
+  println("Starting tests.")
+  println
   client ! solver
-  println("Done.")
-
-  // println("Sleeping for two seconds.")
-  // Thread.sleep(2000)
-  // println("Done.")
-
-  // println("Killing everything.")
-  // toKill foreach (actor => actorSystem stop actor)
-  // actorSystem shutdown ()
-  // println("Done.")
-
-  // println("Exiting.")
-  // println
 
 
   trait SolverBenchs extends Actor {
     import ExprStructure._
     import Messages._
 
+    def unexpected(msg: Any) = {
+      msg match {
+        case SolverError(msgs) => {
+          println("> Solver error:")
+          msgs.foreach(m => println("  > " + m))
+        }
+        case m: SmtsMsg => println("Unexpected Smts message: " + m + ".")
+        case m => println("Unexpected non-Smts message: " + m + ".")
+      }
+      println
+      killSystem()
+    }
+
     def act: Receive
 
-    def killSystem = actorSystem shutdown ()
+    def killSystem() = { title("Exiting.") ; println ; actorSystem shutdown () }
 
-    def simpleTest1(solver: ActorRef) = {
+    def restart(): Unit = { println("Restarting.") ; solver ! Restart }
+
+    def checksatTest(continuation: () => Unit): Unit = {
+      title("Starting CHECKSAT test.")
       val a = Ident("a")
       val notA = Not(a)
       val aNotA = AndN(a :: notA :: Nil)
+      println("Setting logic to QF_LIA.")
+      solver ! SetLogic(smts.logics.QF_LIA)
       println("Declaring function symbol " + a + ".")
       solver ! DeclareFun((a,Nil,BoolSort) :: Nil)
       println("Asserting " + aNotA + ".")
@@ -105,16 +119,96 @@ akka {
       println("CheckSat.")
       solver ! CheckSat
       context become {
-        case Sat => { println("Sat.") ; context become act }
-        case Unsat => { println("Unsat.") ; context become act }
+        case Sat => { println("> Sat.") ; context become act ; continuation() }
+        case Unsat => { println("> Unsat.") ; context become act ; continuation() }
         case Unknown => {
-          println("Solver can't decide satisfiability.") ; context become act
+          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
         }
-        case SolverError(msgList) => {
-          println("SolverError:")
-          msgList foreach (msg => println("  " + msg))
-          context become act
+        case msg => unexpected(msg)
+      }
+    }
+
+    def modelTest(continuation: () => Unit): Unit = {
+      title("Starting MODEL test.")
+      val a = Ident("a")
+      val b = Ident("b")
+      val notA = Not(a)
+      val bNotA = AndN(b :: notA :: Nil)
+      println("Setting logic to QF_LIA.")
+      solver ! SetLogic(smts.logics.QF_LIA)
+      println("Declaring function symbols " + a + " and " + b + ".")
+      solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
+      println("Asserting " + bNotA + ".")
+      solver ! Assert(bNotA)
+      println("CheckSat.")
+      solver ! CheckSat
+      context become {
+        case Sat => {
+          println("> Sat.")
+          println("Getting model.")
+          solver ! GetModel
+          context become {
+            case Model(model) => {
+              println("> Model:") ; println("  > " + model)
+              context become act ; continuation()
+            }
+            case msg => unexpected(msg)
+          }
         }
+        case Unsat => { println("> Unsat.") ; context become act ; continuation() }
+        case Unknown => {
+          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
+        }
+        case msg => unexpected(msg)
+      }
+    }
+
+    def unsatCoreTest(continuation: () => Unit): Unit = {
+      title("Starting UNSAT CORE test.")
+      val a = Ident("a")
+      val b = Ident("b")
+      val label1 = "label1"
+      val label2 = "label2"
+      val label3 = "label3"
+      val notA = Not(a)
+      val bExpr = b
+      val notAExpr = Not(a)
+      val bAndA = AndN(b :: a :: Nil)
+      val map = new scala.collection.immutable.HashMap[String,Expr] +
+        ((label1, bExpr)) + ((label2, notAExpr)) + ((label3,bAndA))
+      def getExpr(label: String) = map.get(label).get
+      println("Setting logic to QF_LIA.")
+      solver ! SetLogic(smts.logics.QF_LIA)
+      println("Declaring function symbols " + a + " and " + b + ".")
+      solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
+      for ((label,expr) <- map) {
+        println("Asserting " + expr + " with label \"" + label + "\".")
+        solver ! Assert(expr,Some(Ident(label)))
+      }
+      println("CheckSat.")
+      solver ! CheckSat
+      context become {
+        case Sat => {
+          println("> Sat.")
+          context become act ; continuation()
+        }
+        case Unsat => {
+          println("> Unsat.")
+          println("GetUnsatCore.")
+          solver ! GetUnsatCore
+          context become {
+            case UnsatCore(core) => {
+              println("> Core:")
+              core.foreach(label => println("  > [" + label + "] -> " + getExpr(label)))
+              context become act ; continuation()
+            }
+            case msg => unexpected(msg)
+          }
+        }
+        case Unknown => {
+          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
+        }
+        case msg => unexpected(msg)
       }
     }
 

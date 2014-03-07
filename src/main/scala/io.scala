@@ -150,7 +150,6 @@ with SmtsParsers[Expr,Ident,Logic] {
 
     /** Reads on the solver reader and parses it. */
     protected def readMsg(msg: ToSmtsMsg) = {
-      logMsg(msg)
 
       val line = {
         var temp = solverReader.readLine
@@ -158,7 +157,7 @@ with SmtsParsers[Expr,Ident,Logic] {
         temp
       }
       logResultLine(line)
-      printReader("Line: " + line)
+      // printReader("Line: " + line)
 
       // Internal loop to get all the lines.
       @tailrec
@@ -169,7 +168,7 @@ with SmtsParsers[Expr,Ident,Logic] {
         case 0 => text
         case n if n >= 0 => {
           val newLine = solverReader.readLine
-          printReader("Line: " + newLine)
+          // printReader("Line: " + newLine)
           logResultLine(newLine)
           loop(text + " " + newLine, parentheses + getParenthesisCount(newLine))
         }
@@ -182,6 +181,7 @@ with SmtsParsers[Expr,Ident,Logic] {
             { logResultLine("success") ; "success" }
           case _ => loop()
         }
+        // printReader("Logging result line.")
         logResultLine("")
         phrase(getParser(msg))(
           new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))
@@ -206,9 +206,15 @@ with SmtsParsers[Expr,Ident,Logic] {
   trait SmtsReaderNoSuccess extends SmtsReaderSuccess {
     import Messages.{ToSmtsMsg,QueryMsg}
     override protected def readMsg(msg: ToSmtsMsg) = {
-      logMsg(msg) ; msg match {
-        case _: QueryMsg => { printReader("Query, reading answer.") ; super.readMsg(msg) }
-        case _ => { printReader("Not a query, doing nothing.") ; () }
+      msg match {
+        case _: QueryMsg => {
+          // printReader("Query, reading answer.")
+          super.readMsg(msg)
+        }
+        case _ => {
+          // printReader("Not a query, doing nothing.")
+          ()
+        }
       }
     }
   }

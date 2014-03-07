@@ -45,8 +45,14 @@ with SmtsLog[Expr,Ident,Sort] {
     protected def handleMessage(msg: Any) = msg match {
       case Restart => restart
       case KillSolver => { killSolver ; context stop self }
-      case msg: ToSmtsMsg => { printMaster("Writing message.") ; writeMsg(msg) }
-      case msg: FromSmtsMsg => client ! msg
+      case msg: ToSmtsMsg => {
+        // printMaster("Writing message.")
+        writeMsg(msg)
+      }
+      case msg: FromSmtsMsg => {
+        // printMaster("Forwarding message to client.")
+        client ! msg
+      }
       case msg => throw new UnexpectedMessageException(msg)
     }
 
@@ -65,7 +71,11 @@ with SmtsLog[Expr,Ident,Sort] {
 
     def handleMessage(msg: Any) = msg match {
       case br: BufferedReader => solverReader = br
-      case msg: ToSmtsMsg => { printReader("Received a message (reader) " + msg + ".") ; readMsg(msg) }
+      case msg: ToSmtsMsg => {
+        // printReader("Received a message (reader) " + msg + ".")
+        logMsg(msg)
+        readMsg(msg)
+      }
       case msg => throw new UnexpectedMessageException(msg)
     }
 

@@ -34,7 +34,7 @@ trait SmtsLog[Expr,Ident,Sort] extends SmtsIO[Expr,Ident,Sort] {
 
     override protected def logMsg(msg: ToSmtsMsg) = writeMsg(msg,logBW)
     override protected def logResultLine(line: String) = {
-      logBW write "; " ; logBW write line ; logBW write "\n"
+      logBW write "; " ; logBW write line ; logBW write "\n" ; logBW.flush
     }
     override protected def logSpace = logBW write "\n"
   }

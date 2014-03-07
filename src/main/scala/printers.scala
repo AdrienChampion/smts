@@ -88,7 +88,7 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
       w write "(assert "
       label match {
         case Some(label) => {
-          w write "(!" ; expr2Smt(expr,w) ; w write " :named "
+          w write "(! " ; expr2Smt(expr,w) ; w write " :named "
           ident2Smt(label,w) ; w write ")"
         }
         case None => expr2Smt(expr,w)

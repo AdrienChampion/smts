@@ -61,7 +61,6 @@ function genMakefile {
   printMake "	sbt packageBin"
   printMake "	mkdir -p smtsLib"
   printMake "	cp \`find target/ -iname \"smts_*-$smtsVersion.jar\"\` smtsLib/smts.jar"
-  printMake "	echo \"Done, resulting jar is smtsLib/smts.jar\""
   printMake ""
   printMake "clean:"
   printMake "	sbt clean"
@@ -77,5 +76,12 @@ function printMake {
 
 # Doing things.
 handleOptions "$@"
+echo
+echo "Getting smts version... "
 getVersion
+echo "Configuring smts $smtsVersion."
+echo "Generating Makefile..."
 genMakefile
+echo "Done."
+echo "Run \"make\" to generate the smts jar file in \"smtsLib/\"."
+echo

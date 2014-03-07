@@ -77,7 +77,10 @@ extends SmtsActors[Expr,Ident,Sort] {
     override def preStart = initSolver
 
     def receive = {
-      case msg => { printMaster("Received message " + msg + "." ) ; handleMessage(msg) }
+      case msg => {
+        // printMaster("Received message " + msg + "." )
+        handleMessage(msg)
+      }
     }
   }
 
