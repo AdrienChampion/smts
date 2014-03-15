@@ -21,6 +21,6 @@ package smts.test
 /** Tests basic functionalities of the Smts SMT solver wrapper. */
 object Bench extends ExprSmts.SmtsBench {
 
-  run()
+  println ; run() ; println
 
 }

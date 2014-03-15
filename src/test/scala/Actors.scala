@@ -26,9 +26,63 @@ import com.typesafe.config.ConfigFactory
 /** Tests basic functionalities of the Smts SMT solver wrapper. */
 object Actors extends smts.SmtsFactory[
   ExprStructure.Expr, ExprStructure.Ident, ExprStructure.Sort
-] with SmtParsers with App {
+] with SmtParsers with smts.utils.OptionHandler with App {
 
   import ExprStructure._
+
+
+  // |===| Option related things.
+
+  object Options {
+    // If true, then success parsing is activated.
+    private var _success = false
+    def success = _success
+    def noSuccess = _success = !_success
+
+    // An optional log location.
+    private var _log: Option[String] = None
+    def log = _log
+    def log_= (newLog: String) = _log = Some(newLog)
+
+    // The solver info that will be used.
+    private var _solver: SolverInfo = createSolver("z3")
+    def solver = _solver
+    private def createSolver(s: String) =s match {
+      case "z3" => Z3(success, models = true, unsatCores = true)
+      case "cvc4" => CVC4(success, models = true)
+      case "mathsat5" => MathSat5(success, models = true, unsatCores = true)
+      case _ => throw new Exception("Should not be reachable.")
+    }
+    def createSolverInfo(s: String) = _solver = createSolver(s)
+  }
+
+  val optionPrint = { s: String => println(s) }
+  val myArguments = Nil
+  val myOptions = {
+    (
+      "--solver=", { s: String => optionValue(s) match {
+        case "z3" => Options.createSolverInfo("z3")
+        case "cvc4" | "CVC4" => Options.createSolverInfo("cvc4")
+        case "mathsat" | "MathSat" | "mathsat5" | "MathSat5" =>
+          Options.createSolverInfo("mathsat5")
+        case "dreal" | "dReal" => Options.createSolverInfo("dreal")
+        case _ => optionError("unexpected solver value \"" + optionValue(s) + "\".")
+      }},
+      "<string>: the solver to use. z3, mathsat5 or cvc4 (default z3)." :: Nil
+    ) :: (
+      "--log=", { s: String => {
+        Options.log = optionValue(s)
+        Options.createSolverInfo(Options.solver.name)
+      }},
+      "<file>: a file to log the smt lib 2 queries to." :: Nil
+    ) :: (
+      "--noSuccess", { s: String => Options.noSuccess },
+      ": deactivates success parsing." :: Nil
+    ) :: Nil
+  }
+
+  setOptions()
+
 
   def title(s: String) = println("|=====| \033[31;1m" + s + "\033[0m |=====|")
 
@@ -68,9 +122,12 @@ akka {
   toKill += client
   println("Done")
 
-  print("Creating a smts instance with z3 as the solver... ")
+  print(
+    "Creating a smts instance with " + Options.solver.name + " as the solver... "
+  )
   val solver = actorSystem.actorOf(
-    Smts(client, Z3(models=true, unsatCores=true), log = Some("toto.log")), name = "solver"
+    Smts(client, Options.solver, log = Options.log),
+    name = "solver" + Options.solver.name
   )
 
   toKill += solver
@@ -122,7 +179,8 @@ akka {
         case Sat => { println("> Sat.") ; context become act ; continuation() }
         case Unsat => { println("> Unsat.") ; context become act ; continuation() }
         case Unknown => {
-          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
+          println("> Solver can't decide satisfiability.")
+          context become act ; continuation()
         }
         case msg => unexpected(msg)
       }
@@ -157,58 +215,65 @@ akka {
         }
         case Unsat => { println("> Unsat.") ; context become act ; continuation() }
         case Unknown => {
-          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
+          println("> Solver can't decide satisfiability.")
+          context become act ; continuation()
         }
         case msg => unexpected(msg)
       }
     }
 
-    def unsatCoreTest(continuation: () => Unit): Unit = {
-      title("Starting UNSAT CORE test.")
-      val a = Ident("a")
-      val b = Ident("b")
-      val label1 = "label1"
-      val label2 = "label2"
-      val label3 = "label3"
-      val notA = Not(a)
-      val bExpr = b
-      val notAExpr = Not(a)
-      val bAndA = AndN(b :: a :: Nil)
-      val map = new scala.collection.immutable.HashMap[String,Expr] +
+    def unsatCoreTest(continuation: () => Unit): Unit = Options.solver match {
+      case _: CVC4 => continuation()
+      case _ => {
+        title("Starting UNSAT CORE test.")
+        val a = Ident("a")
+        val b = Ident("b")
+        val label1 = "label1"
+        val label2 = "label2"
+        val label3 = "label3"
+        val notA = Not(a)
+        val bExpr = b
+        val notAExpr = Not(a)
+        val bAndA = AndN(b :: a :: Nil)
+        val map = new scala.collection.immutable.HashMap[String,Expr] +
         ((label1, bExpr)) + ((label2, notAExpr)) + ((label3,bAndA))
-      def getExpr(label: String) = map.get(label).get
-      println("Setting logic to QF_LIA.")
-      solver ! SetLogic(smts.logics.QF_LIA)
-      println("Declaring function symbols " + a + " and " + b + ".")
-      solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
-      for ((label,expr) <- map) {
-        println("Asserting " + expr + " with label \"" + label + "\".")
-        solver ! Assert(expr,Some(Ident(label)))
-      }
-      println("CheckSat.")
-      solver ! CheckSat
-      context become {
-        case Sat => {
-          println("> Sat.")
-          context become act ; continuation()
+        def getExpr(label: String) = map.get(label).get
+        println("Setting logic to QF_LIA.")
+        solver ! SetLogic(smts.logics.QF_LIA)
+        println("Declaring function symbols " + a + " and " + b + ".")
+        solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
+        for ((label,expr) <- map) {
+          println("Asserting " + expr + " with label \"" + label + "\".")
+          solver ! Assert(expr,Some(Ident(label)))
         }
-        case Unsat => {
-          println("> Unsat.")
-          println("GetUnsatCore.")
-          solver ! GetUnsatCore
-          context become {
-            case UnsatCore(core) => {
-              println("> Core:")
-              core.foreach(label => println("  > [" + label + "] -> " + getExpr(label)))
-              context become act ; continuation()
-            }
-            case msg => unexpected(msg)
+        println("CheckSat.")
+        solver ! CheckSat
+        context become {
+          case Sat => {
+            println("> Sat.")
+            context become act ; continuation()
           }
+          case Unsat => {
+            println("> Unsat.")
+            println("GetUnsatCore.")
+            solver ! GetUnsatCore
+            context become {
+              case UnsatCore(core) => {
+                println("> Core:")
+                core.foreach(
+                  label => println("  > [" + label + "] -> " + getExpr(label))
+                )
+                context become act ; continuation()
+              }
+              case msg => unexpected(msg)
+            }
+          }
+          case Unknown => {
+            println("> Solver can't decide satisfiability.")
+            context become act ; continuation()
+          }
+          case msg => unexpected(msg)
         }
-        case Unknown => {
-          println("> Solver can't decide satisfiability.") ; context become act ; continuation()
-        }
-        case msg => unexpected(msg)
       }
     }
 

@@ -40,7 +40,7 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
     /** Definition parser. */
     lazy val defineParser: PackratParser[Binding] =
       "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~ smt2Sort ~ smt2Expr <~ ")" ^^ {
-        case id ~ _ ~ params ~ _ ~ sort ~ expr => Binding(id,sort,params,expr)
+        case id ~ _ ~ params ~ _ ~ sort ~ expr => TypedBinding(id,sort,params,expr)
       }
 
     /** Model parser. */
@@ -99,22 +99,24 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
     }
     /** Parser used for check-sat results. */
     lazy val checkSatParser: PackratParser[FromSmtsMsg] = {
-      satParser | failureParser | timeoutParser
+      timeoutParser | failureParser | satParser
     }
     /** Parser used for get-model results. */
     lazy val getModelParser: PackratParser[FromSmtsMsg] = {
-      modelParser | failureParser | timeoutParser
+      timeoutParser | failureParser | modelParser
     }
     /** Parser used for get-value results. */
     lazy val getValueParser: PackratParser[FromSmtsMsg] = {
-      valuesParser | failureParser | timeoutParser
+      timeoutParser | failureParser | valuesParser
     }
     /** Parser used for get-unsat-core results. */
     lazy val getUnsatCoreParser: PackratParser[FromSmtsMsg] = {
-      unsatCoreParser | failureParser | timeoutParser
+      timeoutParser | failureParser | unsatCoreParser
     }
 
-    protected def getParser(msg: ToSmtsMsg): PackratParser[FromSmtsMsg] = msg match {
+    private[smts] def getParser(
+      msg: ToSmtsMsg
+    ): PackratParser[FromSmtsMsg] = msg match {
       case CheckSat => checkSatParser
       case GetModel => getModelParser
       case GetValue(exprs) => getValueParser

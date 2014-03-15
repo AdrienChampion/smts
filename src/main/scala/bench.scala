@@ -85,9 +85,12 @@ package object bench {
           case class Fail(val msg: String)
 
           protected def solverInfo = Options.solver match {
-            case "z3" => Z3(success = true, timeoutQuery = Options.timeout)
-            case "cvc4" => CVC4(success = true, timeoutQuery = Options.timeout)
-            case "mathsat" => Mathsat(success = true, timeoutQuery = Options.timeout)
+            case "z3" =>
+              Z3(success = true, timeoutQuery = Options.timeout)
+            case "cvc4" =>
+              CVC4(success = true, timeoutQuery = Options.timeout)
+            case "mathsat" =>
+              MathSat5(success = true, timeoutQuery = Options.timeout)
             case s => {
               verbln("Unexpected solver " + s + ".") ; space ; sys exit -1
             }

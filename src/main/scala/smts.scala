@@ -44,9 +44,10 @@ extends SmtsActors[Expr,Ident,Sort] {
     def apply(
       client: ActorRef, solverInfo: SolverInfo,
       freeRestarts: Boolean = false, log: Option[String] = None
-    ) = Props(
-      new Master(client,solverInfo,log)
-    )
+    ) = {
+      _instanceCount += 1
+      Props(new Master(client,solverInfo,log))
+    }
   }
 
   /** Master with only one solver process.
@@ -61,14 +62,14 @@ extends SmtsActors[Expr,Ident,Sort] {
 
     protected[this] val reader = context.actorOf(Props(
       (solverInfo.success,log) match {
-        case (true,None) => new ReaderSuccess(self,getSolverReader)
-        case (false,None) => new ReaderNoSuccess(self,getSolverReader)
+        case (true,None) => new ReaderSuccess(self,getSolverReader,solverInfo)
+        case (false,None) => new ReaderNoSuccess(self,getSolverReader,solverInfo)
         case (true,Some(path)) =>
-          new ReaderSuccess(self,getSolverReader) with ReaderLog {
+          new ReaderSuccess(self,getSolverReader,solverInfo) with ReaderLog {
             def logFilePath = path
           }
         case (false,Some(path)) =>
-          new ReaderNoSuccess(self,getSolverReader) with ReaderLog {
+          new ReaderNoSuccess(self,getSolverReader,solverInfo) with ReaderLog {
             def logFilePath = path
           }
       }
@@ -77,17 +78,15 @@ extends SmtsActors[Expr,Ident,Sort] {
     override def preStart = initSolver
 
     def receive = {
-      case msg => {
-        // printMaster("Received message " + msg + "." )
-        handleMessage(msg)
-      }
+      case msg => handleMessage(msg)
     }
   }
 
   /** Reader with success parsing. */
   class ReaderSuccess private[smts](
     protected[this] val master: ActorRef,
-    protected[this] var solverReader: BufferedReader
+    protected[this] var solverReader: BufferedReader,
+    protected[this] val solverInfo: SolverInfo
   ) extends ReaderActor with SmtsReaderSuccess {
     def receive = {
       case msg => handleMessage(msg)
@@ -99,7 +98,10 @@ extends SmtsActors[Expr,Ident,Sort] {
     /** The '''MasterActor''' this actor interacts with. */
     _master: ActorRef,
     /** Actual reader on the solver process output. */
-    _solverReader: BufferedReader
-  ) extends ReaderSuccess(_master,_solverReader) with SmtsReaderNoSuccess
+    _solverReader: BufferedReader,
+    /** Underlying solver information. */
+    _solverInfo: SolverInfo
+  ) extends ReaderSuccess(_master,_solverReader,_solverInfo)
+  with SmtsReaderNoSuccess
 
 }

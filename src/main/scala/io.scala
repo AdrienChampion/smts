@@ -21,9 +21,8 @@ package smts
 import java.io._
 
 /** Provides writing and reading traits. */
-trait SmtsIO[Expr,Ident,Logic]
-extends SmtsPrinters[Expr,Ident,Logic]
-with SmtsParsers[Expr,Ident,Logic] {
+trait SmtsIO[Expr,Ident,Sort]
+extends SmtsSolvers[Expr,Ident,Sort] {
 
   /** Writes on the solver process input. Forwards all messages to the
     * reader to parse for '''success'''. */
@@ -123,6 +122,9 @@ with SmtsParsers[Expr,Ident,Logic] {
     import Messages.{SmtsMsg,ToSmtsMsg,FromSmtsMsg}
     import scala.annotation.tailrec
 
+    /** The solver information. */
+    protected def solverInfo: SolverInfo
+
     /** Yields a '''Reader''' on the solver process. */
     protected var solverReader: BufferedReader
 
@@ -183,7 +185,7 @@ with SmtsParsers[Expr,Ident,Logic] {
         }
         // printReader("Logging result line.")
         logResultLine("")
-        phrase(getParser(msg))(
+        phrase(solverInfo.getParser(msg))(
           new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))
         ) match {
           case Success(smtsMsg,_) => notifyMaster(smtsMsg)

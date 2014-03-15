@@ -48,120 +48,39 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
   val smt2Sort: PackratParser[Sort]
 
 
-  // |=====| Solver info.
-
-  /** Extended by all the solver classes. */
-  sealed trait SolverInfo {
-    import Messages.{ToSmtsMsg,SetOption}
-
-    /** The command launching the solver. */
-    val command: String
-    /** If true Smts will parse for success (default '''false'''). */
-    val success: Boolean
-    /** If true model generation will be activated in the solver
-      * (default '''false'''). */
-    val models: Boolean
-    /** If true unsat core generation will be activated in the solver
-      * (default '''false'''). */
-    val unsatCores: Boolean
-    /** Allows to specify a timeout in milliseconds (default '''None'''). */
-    val timeout: Option[Int]
-    /** Allows to specify a timeout in milliseconds for each query to the solver
-      * (default '''None'''. */
-    val timeoutQuery: Option[Int]
-    /** Commands the solver will always be launched with (default '''Nil'''). */
-    val initWith: List[ToSmtsMsg]
-
-    /** Commands to write when launching the solver. */
-    val startMsgs: List[ToSmtsMsg] = {
-      val withCores =
-        if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
-        else initWith
-      val withModels =
-        if (models) SetOption(":produce-models true") :: withCores
-        else withCores
-      if (success) SetOption(":print-success true") :: withModels else withModels
-    }
-
-    /** Converts an integer in milliseconds to its string representation in
-      * seconds. */
-    def millis2secs(millis: Int) = {
-      val milliString = millis.toString
-      milliString.size match {
-        case n if n > 3 => milliString.take(n-3)
-        case n => "0." + ("0" * (n-3)) + milliString
-      }
-    }
-  }
-
-  /** Solver information class for Z3. */
-  case class Z3(
-    val success: Boolean = false,
-    val models: Boolean = false,
-    val unsatCores: Boolean = false,
-    val baseCommand: String = "z3 -in -smt2",
-    val initWith: List[Messages.ToSmtsMsg] = Nil,
-    val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
-  ) extends SolverInfo {
-    val command = baseCommand + ( timeout match {
-      case None => ""
-      case Some(to) => " -T:" + millis2secs(to)
-    }) + (timeoutQuery match {
-      case None => ""
-      case Some(to) => " -t:" + millis2secs(to)
-    })
-    override def toString = "z3"
-  }
-
-  /** Solver information class for mathsat. */
-  case class Mathsat(
-    val success: Boolean = false,
-    val models: Boolean = false,
-    val unsatCores: Boolean = false,
-    val baseCommand: String = "mathsat",
-    val initWith: List[Messages.ToSmtsMsg] = Nil,
-    val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
-  ) extends SolverInfo {
-    val command = baseCommand
-    override def toString = "mathsat"
-  }
-
-  /** Solver information class for CVC4. Unsat cores deactivated. */
-  case class CVC4(
-    val success: Boolean = false,
-    val models: Boolean = false,
-    val baseCommand: String = "cvc4 -q --lang=smt",
-    val initWith: List[Messages.ToSmtsMsg] = Nil,
-    val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
-  ) extends SolverInfo {
-    val command = baseCommand + ( timeout match {
-      case None => ""
-      case Some(to) => " --tlimit=" + to
-    }) + (timeoutQuery match {
-      case None => ""
-      case Some(to) => " --tlimit-per=" + to
-    })
-    val unsatCores: Boolean = false
-    override def toString = "cvc4"
-  }
-
-
   // |=====| Data structures.
+
+  /** Trait gathering typed bindings and untyped bindings (mathsat does not
+    * precise the sorts on models). */
+  trait Binding {
+    val ident: Ident ; val expr: Expr
+  }
 
   /** Class for bindings (models).
     * @param ident The identifier of the function.
     * @param sort The sort of the function.
     * @param params The parameters of the function as pairs of identifiers and sorts.
     * @param expr The expression of the function. */
-  case class Binding(
-    val ident: Ident, val sort: Sort, val params: Traversable[(Ident,Sort)], val expr: Expr
-  ) {
-    override def toString() = "def " + ident.toString + "(" + params.foldLeft("")((s,p) =>
-      if (p == params.head) s + p._1 + ": " + p._2 else s + ", " + p._1 + ": " + p._2
-    ) + "): " + sort + " = " + expr
+  case class TypedBinding(
+    val ident: Ident, val sort: Sort,
+    val params: Traversable[(Ident,Sort)], val expr: Expr
+  ) extends Binding {
+    override def toString() =
+      "def " + ident.toString + "(" + params.foldLeft("")((s,p) =>
+        if (p == params.head) s + p._1 + ": " + p._2
+        else s + ", " + p._1 + ": " + p._2
+      ) + "): " + sort + " = " + expr
+  }
+
+  /** Class for bindings (models).
+    * @param ident The identifier of the function.
+    * @param sort The sort of the function.
+    * @param params The parameters of the function as pairs of identifiers and sorts.
+    * @param expr The expression of the function. */
+  case class UntypedBinding(
+    val ident: Ident, val expr: Expr
+  ) extends Binding {
+    override def toString() = "def " + ident.toString + " = " + expr
   }
 
 
