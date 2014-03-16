@@ -21,6 +21,7 @@ package smts
 import java.io._
 
 import scala.annotation.tailrec
+import scala.language.postfixOps
 import sys.process.stringSeqToProcess
 
 import smts.utils._

@@ -32,6 +32,8 @@ with SmtsParsers[Expr,Ident,Sort] {
 
     /** The command launching the solver. */
     val command: String
+    /** User defined options for the underlying solver. */
+    val options: String
     /** If true Smts will parse for success (default '''false'''). */
     val success: Boolean
     /** If true model generation will be activated in the solver
@@ -81,7 +83,8 @@ with SmtsParsers[Expr,Ident,Sort] {
     val baseCommand: String = "z3 -in -smt2",
     val initWith: List[Messages.ToSmtsMsg] = Nil,
     val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
+    val timeoutQuery: Option[Int] = None,
+    val options: String = ""
   ) extends SolverInfo {
     val command = baseCommand + ( timeout match {
       case None => ""
@@ -89,7 +92,7 @@ with SmtsParsers[Expr,Ident,Sort] {
     }) + (timeoutQuery match {
       case None => ""
       case Some(to) => " -t:" + millis2secs(to)
-    })
+    }) + " " + options
     val name = "z3"
     override def toString = name
   }
@@ -102,9 +105,10 @@ with SmtsParsers[Expr,Ident,Sort] {
     val baseCommand: String = "mathsat",
     val initWith: List[Messages.ToSmtsMsg] = Nil,
     val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
+    val timeoutQuery: Option[Int] = None,
+    val options: String = ""
   ) extends SolverInfo {
-    val command = baseCommand
+    val command = baseCommand + " " + options
     val name = "mathsat5"
     override def toString = name
 
@@ -128,7 +132,8 @@ with SmtsParsers[Expr,Ident,Sort] {
     val baseCommand: String = "cvc4 -q --lang=smt",
     val initWith: List[Messages.ToSmtsMsg] = Nil,
     val timeout: Option[Int] = None,
-    val timeoutQuery: Option[Int] = None
+    val timeoutQuery: Option[Int] = None,
+    val options: String = ""
   ) extends SolverInfo {
     val command = baseCommand + ( timeout match {
       case None => ""
@@ -136,7 +141,7 @@ with SmtsParsers[Expr,Ident,Sort] {
     }) + (timeoutQuery match {
       case None => ""
       case Some(to) => " --tlimit-per=" + to
-    })
+    }) + " " + options
     val unsatCores: Boolean = false
     val name = "cvc4"
     override def toString = name

@@ -42,7 +42,7 @@ with SmtsLog[Expr,Ident,Sort] {
     override def preStart = initSolver
 
     /** Function handling the messages from the user and the reader. */
-    protected def handleMessage(msg: Any) = msg match {
+    protected def handleMessage(message: Any) = message match {
       case Restart => restart
       case KillSolver => { killSolver ; context stop self }
       case msg: ToSmtsMsg => {
@@ -57,7 +57,6 @@ with SmtsLog[Expr,Ident,Sort] {
     }
 
     override def postStop = { context stop reader ; killSolver }
-
   }
 
   /** Actor hidden from the user reading and parsing the solver output. */

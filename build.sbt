@@ -22,6 +22,8 @@ version := "0.1"
 
 scalaVersion := "2.10.3"
 
+scalacOptions ++= Seq("-unchecked", "-feature")
+
 javaOptions ++= Seq("-Xmx1024M","-Xms512M")
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
