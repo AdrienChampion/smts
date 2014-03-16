@@ -38,10 +38,12 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
       "(" ~> smt2Ident ~ smt2Sort <~ ")" ^^ { case ident ~ sort => (ident,sort) }
 
     /** Definition parser. */
-    lazy val defineParser: PackratParser[Binding] =
-      "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~ smt2Sort ~ smt2Expr <~ ")" ^^ {
+    lazy val defineParser: PackratParser[Binding] = {
+      "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~
+      smt2Sort ~ smt2Expr <~ ")" ^^ {
         case id ~ _ ~ params ~ _ ~ sort ~ expr => TypedBinding(id,sort,params,expr)
       }
+    }
 
     /** Model parser. */
     lazy val modelParser: PackratParser[Model] =
@@ -152,7 +154,8 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
       "(" ~ "set-option" ~> """[:][a-zA-Z][a-zA-Z\-]""".r <~ ")" ^^ {
         case option => SetOption(option)
       } |
-      "(" ~ "set-option" ~> """[:][a-zA-Z][a-zA-Z\-]""".r ~ ("true" | "false" | intParser) <~ ")" ^^ {
+      "(" ~ "set-option" ~> """[:][a-zA-Z][a-zA-Z\-]""".r ~
+      ("true" | "false" | intParser) <~ ")" ^^ {
         case option~value => SetOption(option + " " + value)
       } |
       "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ realParser <~ ")" ^^ {
@@ -161,7 +164,8 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
       "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ identParser <~ ")" ^^ {
         case c~info~value => SetInfo(c + info,Some(value))
       } |
-      "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~ "\"" ~ identParser <~ "\"" ~ ")" ^^ {
+      "(" ~ "set-info" ~> ":" ~ """[a-zA-Z][a-zA-Z0-9\-]*""".r ~
+      "\"" ~ identParser <~ "\"" ~ ")" ^^ {
         case c~info~_~value => SetInfo(c + info,Some("\"" + value + "\""))
       } |
       "(" ~ "set-info" ~> identParser <~ ")" ^^ {
@@ -177,24 +181,37 @@ trait SmtsParsers[Expr,Ident,Sort] extends SmtsCore[Expr,Ident,Sort] {
       "(" ~ "declare-fun" ~> smt2Ident ~ "(" ~ rep(smt2Sort) ~ ")" ~ smt2Sort <~ ")" ^^ {
         case id~_~sorts~_~sort => DeclareFun(id,sorts,sort)
       } |
-      "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~ smt2Sort ~ smt2Expr <~ ")" ^^ {
+      "(" ~ "define-fun" ~> smt2Ident ~ "(" ~ rep(paramParser) ~ ")" ~
+      smt2Sort ~ smt2Expr <~ ")" ^^ {
         case id~_~ids~_~sort~expr => DefineFun(id,ids,sort,expr)
       } |
       "(" ~ "push" ~> intParser <~ ")" ^^ { case n => Push(n.toInt) } |
       "(" ~ "pop" ~> intParser <~ ")" ^^ { case n => Pop(n.toInt) } |
       "(" ~ "check-sat" ~ ")" ^^ { case _ => CheckSat } |
       "(" ~ "get-model" ~ ")" ^^ { case _ => GetModel } |
-      "(" ~ "get-value" ~ "(" ~> rep1(smt2Expr) <~ ")" ^^ { case values => GetValue(values) } |
+      "(" ~ "get-value" ~ "(" ~> rep1(smt2Expr) <~ ")" ^^ {
+        case values => GetValue(values)
+      } |
       "(" ~ "get-unsat-core" ~ ")" ^^ { case _ => GetUnsatCore } |
       "(" ~ "assert" ~> smt2Expr <~ ")" ^^ { case expr => Assert(expr) } |
-      "(" ~ "assert" ~ "(" ~ "!" ~> smt2Expr ~ ":named" ~ smt2Ident <~ ")" ^^ { case expr~_~id => Assert(expr,Some(id)) } |
+      "(" ~ "assert" ~ "(" ~ "!" ~> smt2Expr ~ ":named" ~ identParser <~ ")" ^^ {
+        case expr~_~id => Assert(expr,Some(id))
+      } |
       "(" ~ "exit" ~ ")" ^^ { case _ => KillSolver } |
       // Unsupported commands.
-      "(" ~ "get-assertions" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-assertions.") } |
+      "(" ~ "get-assertions" ~ ")" ^^ {
+        case _ => DummyMsg("Unsupported command get-assertions.")
+      } |
       "(" ~ "get-proof" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-proof.") } |
-      "(" ~ "get-assignment" ~ ")" ^^ { case _ => DummyMsg("Unsupported command get-assgnment.") } |
-      "(" ~ "get-option" ~> identParser <~ ")" ^^ { case option => DummyMsg("Unsupported command get-option (" + option + ").") } |
-      "(" ~ "get-info" ~> identParser <~ ")" ^^ { case info => DummyMsg("Unsupported command get-info (" + info + ").") }
+      "(" ~ "get-assignment" ~ ")" ^^ {
+        case _ => DummyMsg("Unsupported command get-assgnment.")
+      } |
+      "(" ~ "get-option" ~> identParser <~ ")" ^^ {
+        case option => DummyMsg("Unsupported command get-option (" + option + ").")
+      } |
+      "(" ~ "get-info" ~> identParser <~ ")" ^^ {
+        case info => DummyMsg("Unsupported command get-info (" + info + ").")
+      }
     }
   }
 }

@@ -28,7 +28,7 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
 
     // |=====| Settings.
 
-    def printSetLogic(w: Writer, logic: logics.Logic) = {
+    def printSetLogic(w: Writer, logic: Logics.Logic) = {
       w write "(set-logic " ; logic writeTo w ; w write ")\n"
     }
     def printSetOption(w: Writer, option: String) = {
@@ -84,12 +84,12 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
 
     // |=====| Other.
 
-    def printAssert(w: Writer, expr: Expr, label: Option[Ident]) = {
+    def printAssert(w: Writer, expr: Expr, label: Option[String]) = {
       w write "(assert "
       label match {
         case Some(label) => {
           w write "(! " ; expr2Smt(expr,w) ; w write " :named "
-          ident2Smt(label,w) ; w write ")"
+          w write label ; w write ")"
         }
         case None => expr2Smt(expr,w)
       }

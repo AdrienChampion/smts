@@ -20,6 +20,9 @@ package smts.test
 
 import java.io.Writer
 
+import scala.collection.Traversable
+import scala.collection.immutable.HashMap
+
 import akka.actor._
 import com.typesafe.config.ConfigFactory
 
@@ -45,9 +48,10 @@ object Actors extends smts.SmtsFactory[
     def log_= (newLog: String) = _log = Some(newLog)
 
     // The solver info that will be used.
-    private var _solver: SolverInfo = SolverInfo("z3")
+    private var _solver: SolverInfo = Z3(models = true, unsatCores = true)
     def solver = _solver
-    def createSolverInfo(s: String) = _solver = SolverInfo(s)
+    def createSolverInfo(s: String) =
+      _solver = SolverInfo(s, models = Some(true), unsatCores = Some(true))
   }
 
   val optionPrint = { s: String => println(s) }
@@ -93,9 +97,9 @@ akka {
   val client = actorSystem.actorOf(Props(new SolverBenchs {
     def act = {
       case solver: ActorRef => {
-        checksatTest(
-          () => { restart() ; println ; modelTest(
-            () => { restart() ; println ; unsatCoreTest(
+        checksatBool(
+          () => { restart() ; println ; modelBool(
+            () => { restart() ; println ; unsatCoreBool(
               () => { println ; killSystem() }
             )}
           )}
@@ -129,6 +133,7 @@ akka {
   trait SolverBenchs extends Actor {
     import ExprStructure._
     import Messages._
+    import Logics.{Logic,QF_LIA}
 
     def unexpected(msg: Any) = {
       msg match {
@@ -149,70 +154,35 @@ akka {
 
     def restart(): Unit = { println("Restarting.") ; solver ! Restart }
 
-    def checksatTest(continuation: () => Unit): Unit = {
-      title("Starting CHECKSAT test.")
+    def checksatBool(continuation: () => Unit): Unit = {
       val a = Ident("a")
       val notA = Not(a)
       val aNotA = AndN(a :: notA :: Nil)
-      println("Setting logic to QF_LIA.")
-      solver ! SetLogic(smts.logics.QF_LIA)
-      println("Declaring function symbol " + a + ".")
-      solver ! DeclareFun((a,Nil,BoolSort) :: Nil)
-      println("Asserting " + aNotA + ".")
-      solver ! Assert(aNotA)
-      println("CheckSat.")
-      solver ! CheckSat
-      context become {
-        case Sat => { println("> Sat.") ; context become act ; continuation() }
-        case Unsat => { println("> Unsat.") ; context become act ; continuation() }
-        case Unknown => {
-          println("> Solver can't decide satisfiability.")
-          context become act ; continuation()
-        }
-        case msg => unexpected(msg)
-      }
+      title("Starting CHECKSAT test on Booleans.")
+      checksatTest(
+        QF_LIA, (a,Nil,BoolSort) :: Nil,
+        (aNotA,None) :: Nil, msg => continuation()
+      )
     }
 
-    def modelTest(continuation: () => Unit): Unit = {
-      title("Starting MODEL test.")
+    def modelBool(continuation: () => Unit): Unit = {
       val a = Ident("a")
       val b = Ident("b")
       val notA = Not(a)
       val bNotA = AndN(b :: notA :: Nil)
-      println("Setting logic to QF_LIA.")
-      solver ! SetLogic(smts.logics.QF_LIA)
-      println("Declaring function symbols " + a + " and " + b + ".")
-      solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
-      println("Asserting " + bNotA + ".")
-      solver ! Assert(bNotA)
-      println("CheckSat.")
-      solver ! CheckSat
-      context become {
-        case Sat => {
-          println("> Sat.")
-          println("Getting model.")
-          solver ! GetModel
-          context become {
-            case Model(model) => {
-              println("> Model:") ; println("  > " + model)
-              context become act ; continuation()
-            }
-            case msg => unexpected(msg)
-          }
-        }
-        case Unsat => { println("> Unsat.") ; context become act ; continuation() }
-        case Unknown => {
-          println("> Solver can't decide satisfiability.")
-          context become act ; continuation()
-        }
-        case msg => unexpected(msg)
-      }
+      title("Starting MODEL test on Booleans.")
+      modelTest(
+        QF_LIA,
+        (a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil,
+        (notA,None) :: (bNotA,None) :: Nil,
+        msg => continuation()
+      )
     }
 
-    def unsatCoreTest(continuation: () => Unit): Unit = Options.solver match {
+    def unsatCoreBool(continuation: () => Unit): Unit = Options.solver match {
       case _: CVC4 => continuation()
       case _ => {
-        title("Starting UNSAT CORE test.")
+        title("Starting UNSAT CORE test on Booleans.")
         val a = Ident("a")
         val b = Ident("b")
         val label1 = "label1"
@@ -222,47 +192,124 @@ akka {
         val bExpr = b
         val notAExpr = Not(a)
         val bAndA = AndN(b :: a :: Nil)
-        val map = new scala.collection.immutable.HashMap[String,Expr] +
-        ((label1, bExpr)) + ((label2, notAExpr)) + ((label3,bAndA))
-        def getExpr(label: String) = map.get(label).get
-        println("Setting logic to QF_LIA.")
-        solver ! SetLogic(smts.logics.QF_LIA)
-        println("Declaring function symbols " + a + " and " + b + ".")
-        solver ! DeclareFun((a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil)
-        for ((label,expr) <- map) {
-          println("Asserting " + expr + " with label \"" + label + "\".")
-          solver ! Assert(expr,Some(Ident(label)))
+        val map = new HashMap[String,Expr] +
+          ((label1, bExpr)) + ((label2, notAExpr)) + ((label3,bAndA))
+        val list: List[(Expr,Option[String])] =
+          map.toList map (pair => (pair._2,Some(pair._1)))
+        unsatCoreTest(
+          QF_LIA,
+          (a,Nil,BoolSort) :: (b,Nil,BoolSort) :: Nil,
+          list, map, msg => continuation()
+        )
+      }
+    }
+
+    def checksatTest(
+      logic: Logic,
+      funs: Traversable[(Ident,Traversable[Sort],Sort)],
+      exprs: Traversable[(Expr,Option[String])],
+      continuation: FromSmtsMsg => Unit
+    ): Unit = {
+      println("Setting logic to " + logic + ".")
+      solver ! SetLogic(logic)
+
+      println("Declaring function symbol(s)")
+      funs foreach (fun => {
+        println("> " + fun)
+        solver ! DeclareFun(fun :: Nil)
+      })
+
+      println("Asserting")
+      exprs foreach (expr => {
+        println(
+          "> " + expr._1 + (if (expr._2.isDefined) " \033[1m(" + expr._2.get + ")\033[0m")
+        )
+        solver ! Assert(expr._1,expr._2)
+      })
+
+      println("Checksat")
+      solver ! CheckSat
+
+      context become {
+        case Sat => { println("> Sat.") ; context become act ; continuation(Sat) }
+        case Unsat => { println("> Unsat.") ; context become act ; continuation(Unsat) }
+        case Unknown => {
+          println("> Solver can't decide satisfiability.")
+          context become act ; continuation(Unknown)
         }
-        println("CheckSat.")
-        solver ! CheckSat
-        context become {
-          case Sat => {
-            println("> Sat.")
-            context become act ; continuation()
-          }
-          case Unsat => {
-            println("> Unsat.")
-            println("GetUnsatCore.")
-            solver ! GetUnsatCore
-            context become {
-              case UnsatCore(core) => {
-                println("> Core:")
-                core.foreach(
-                  label => println("  > [" + label + "] -> " + getExpr(label))
-                )
-                context become act ; continuation()
-              }
-              case msg => unexpected(msg)
+        case msg => unexpected(msg)
+      }
+    }
+
+
+    def modelTest(
+      logic: Logic,
+      funs: Traversable[(Ident,Traversable[Sort],Sort)],
+      exprs: Traversable[(Expr,Option[String])],
+      continuation: FromSmtsMsg => Unit
+    ): Unit = {
+      checksatTest(logic,funs,exprs, msg => msg match {
+        case Sat => {
+
+          println("Getting model.")
+          solver ! GetModel
+          context become {
+            case message@Model(model) => {
+              println("> Model:")
+              model foreach (binding => println(" > " + binding))
+              continuation(message)
             }
+            case msg => unexpected(msg)
           }
-          case Unknown => {
-            println("> Solver can't decide satisfiability.")
-            context become act ; continuation()
+
+        }
+        case Unsat => {
+          println("> Unexpected unsat result, moving on.")
+          continuation(Unsat)
+        }
+        case msg => {
+          println("> Moving on.")
+          continuation(msg)
+        }
+      })
+    }
+
+
+    def unsatCoreTest(
+      logic: Logic,
+      funs: Traversable[(Ident,Traversable[Sort],Sort)],
+      exprs: Traversable[(Expr,Option[String])],
+      map: HashMap[String,Expr],
+      continuation: FromSmtsMsg => Unit
+    ): Unit = checksatTest(logic,funs,exprs, msg => msg match {
+      case Sat => {
+        println("> Unexpected sat result, moving on.")
+        continuation(Sat)
+      }
+      case Unsat => {
+
+        println("Getting unsat core.")
+        solver ! GetUnsatCore
+        context become {
+          case message@UnsatCore(core) => {
+            println("> Unsat core:")
+            core foreach (label => println(
+              " > " + label + " -> " + (map get label match {
+                case Some(expr) => expr.toString
+                case None => "\033[1m<undefined>\033[0m"
+              })
+            ))
+            continuation(message)
           }
           case msg => unexpected(msg)
         }
+
       }
-    }
+      case msg => {
+        println("> Moving on.")
+        continuation(msg)
+      }
+    })
 
   }
 

@@ -27,7 +27,8 @@ import scala.util.parsing.combinator.{PackratParsers,RegexParsers}
   * @tparam Expr The user's type for the data structure.
   * @tparam Ident The user's type for identifiers.
   * @tparam Sort The user's type for sorts. */
-trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
+trait SmtsCore[Expr, Ident, Sort]
+extends RegexParsers with PackratParsers with LogicsAndSorts {
 
   def printMaster(s: String) = println("[\033[31;1mMaster\033[0m] " + s)
   def printReader(s: String) = println("[\033[33;1mReader\033[0m] " + s)
@@ -120,15 +121,15 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
     ) extends ToSmtsMsg
 
     /** Set-logic command. */
-    class SetLogic private(val logic: logics.Logic) extends ToSmtsMsg
+    class SetLogic private(val logic: Logics.Logic) extends ToSmtsMsg
     /** Companion object for '''SetLogic'''. */
     object SetLogic {
       /** Creates a '''SetLogic" message.
         * @param logic A string representing the logic, make sure it is legal. */
-      def apply(logic: String) = new SetLogic(new logics.Logic { val asString = logic })
+      def apply(logic: String) = new SetLogic(new Logics.Logic { val asString = logic })
       /** Creates a '''SetLogic" message.
         * @param logic One of the logics provided by Smts. */
-      def apply(logic: logics.Logic) = new SetLogic(logic)
+      def apply(logic: Logics.Logic) = new SetLogic(logic)
       def unapply(arg: SetLogic) = Some(arg.logic)
     }
 
@@ -201,7 +202,7 @@ trait SmtsCore[Expr, Ident, Sort] extends RegexParsers with PackratParsers {
 
     /** Assert command. */
     case class Assert(
-      val expr: Expr, val label: Option[Ident] = None
+      val expr: Expr, val label: Option[String] = None
     ) extends ToSmtsMsg
 
 
