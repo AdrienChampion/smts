@@ -10,8 +10,9 @@ asynchronous and follow the actor paradigm thanks to the Akka library.
 Messages are consistent with the SMT-LIB 2 standard and most of them
 correspond directly to SMT-LIB 2 commands.  The actual underlying
 solver is ran in a separate process and smts communicates with it
-using system pipes.  Which solvers are used can be specified after
-compilation of the software through a simple configuration file.
+using system pipes. Smts supports Z3, CVC4 and MathSat5. Which solvers
+are used can be specified after compilation of the software thanks to
+a simple configuration file.
 
 Smts does not impose a data structure for expressions to the users.
 They must provide their own as well as a printer for expressions, and
@@ -22,6 +23,7 @@ everything but expressions and sorts, consistently with the underlying
 solver.
 
 Upcoming features:
+* dReal (**not implemented yet**): support for the dReal solver.
 * Free restarts (**not implemented yet**): an smts instance can
   maintain two underlying solver, one active and one passive. When
   asked to restart, smts will restart the active solver and swap two
