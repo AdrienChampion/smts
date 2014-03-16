@@ -1,0 +1,13 @@
+// This should not be parsed.
+
+/** This should not be parsed either.
+  * I can even write on several lines. */
+
+mySolver extends CVC4 {
+  models = true
+  unsatCores = false
+}
+
+anotherSolver2.7 extends Z3 {
+  baseCommand = (blah blah 4703-,.rcuasnjtkhmao blah)
+}
