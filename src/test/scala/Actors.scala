@@ -45,36 +45,23 @@ object Actors extends smts.SmtsFactory[
     def log_= (newLog: String) = _log = Some(newLog)
 
     // The solver info that will be used.
-    private var _solver: SolverInfo = createSolver("z3")
+    private var _solver: SolverInfo = SolverInfo("z3")
     def solver = _solver
-    private def createSolver(s: String) =s match {
-      case "z3" => Z3(success, models = true, unsatCores = true)
-      case "cvc4" => CVC4(success, models = true)
-      case "mathsat5" => MathSat5(success, models = true, unsatCores = true)
-      case _ => throw new Exception("Should not be reachable.")
-    }
-    def createSolverInfo(s: String) = _solver = createSolver(s)
+    def createSolverInfo(s: String) = _solver = SolverInfo(s)
   }
 
   val optionPrint = { s: String => println(s) }
   val myArguments = Nil
   val myOptions = {
     (
-      "--solver=", { s: String => optionValue(s) match {
-        case "z3" => Options.createSolverInfo("z3")
-        case "cvc4" | "CVC4" => Options.createSolverInfo("cvc4")
-        case "mathsat" | "MathSat" | "mathsat5" | "MathSat5" =>
-          Options.createSolverInfo("mathsat5")
-        case "dreal" | "dReal" => Options.createSolverInfo("dreal")
-        case _ => optionError("unexpected solver value \"" + optionValue(s) + "\".")
-      }},
+      "--solver=", { s: String => Options.createSolverInfo(optionValue(s)) },
       "<string>: the solver to use. z3, mathsat5 or cvc4 (default z3)." :: Nil
     ) :: (
-      "--log=", { s: String => {
-        Options.log = optionValue(s)
-        Options.createSolverInfo(Options.solver.name)
-      }},
+      "--log=", { s: String => Options.log = optionValue(s) },
       "<file>: a file to log the smt lib 2 queries to." :: Nil
+    ) :: (
+      "--conf=", { s: String => SolverInfo load optionValue(s) },
+      "<file>: an smts configuration file to load." :: Nil
     ) :: (
       "--noSuccess", { s: String => Options.noSuccess },
       ": deactivates success parsing." :: Nil
