@@ -58,15 +58,7 @@ with SmtsParsers[Expr,Ident,Sort] {
     val name: String
 
     /** Commands to write when launching the solver. */
-    val startMsgs: List[ToSmtsMsg] = {
-      val withCores =
-        if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
-        else initWith
-      val withModels =
-        if (models) SetOption(":produce-models true") :: withCores
-        else withCores
-      if (success) SetOption(":print-success true") :: withModels else withModels
-    }
+    val startMsgs: List[ToSmtsMsg]
 
     /** Converts an integer in milliseconds to its string representation in
       * seconds. */
@@ -134,6 +126,16 @@ with SmtsParsers[Expr,Ident,Sort] {
     val timeoutQuery: Option[Int] = None,
     val options: String = ""
   ) extends SolverInfo {
+    import Messages._
+    val startMsgs: List[ToSmtsMsg] = {
+      val withCores =
+        if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
+        else initWith
+      val withModels =
+        if (models) SetOption(":produce-models true") :: withCores
+        else withCores
+      if (success) SetOption(":print-success true") :: withModels else withModels
+    }
     val command = baseCommand + ( timeout match {
       case None => ""
       case Some(to) => " -T:" + millis2secs(to)
@@ -156,6 +158,16 @@ with SmtsParsers[Expr,Ident,Sort] {
     val timeoutQuery: Option[Int] = None,
     val options: String = ""
   ) extends SolverInfo {
+    import Messages._
+    val startMsgs: List[ToSmtsMsg] = {
+      val withCores =
+        if (unsatCores) SetOption(":produce-unsat-cores true") :: initWith
+        else initWith
+      val withModels =
+        if (models) SetOption(":produce-models true") :: withCores
+        else withCores
+      if (success) SetOption(":print-success true") :: withModels else withModels
+    }
     val command = baseCommand + " " + options
     val name = "mathsat5"
     override def toString = name
@@ -184,6 +196,13 @@ with SmtsParsers[Expr,Ident,Sort] {
     val timeoutQuery: Option[Int] = None,
     val options: String = ""
   ) extends SolverInfo {
+    import Messages._
+    val startMsgs: List[ToSmtsMsg] = {
+      val withModels =
+        if (models) SetOption(":produce-models true") :: initWith
+        else initWith
+      if (success) SetOption(":print-success true") :: withModels else withModels
+    }
     val command = baseCommand + ( timeout match {
       case None => ""
       case Some(to) => " --tlimit=" + to

@@ -378,7 +378,7 @@ trait SmtParsers extends smts.SmtsParsers[
   def expr2Smt(expr: Expr, w: Writer) = expr writeTo w
   def ident2Smt(ident: Ident, w: Writer) = ident writeTo w
   def sort2Smt(sort: Sort, w: Writer) = sort writeTo w
-  lazy val smt2Expr: PackratParser[Expr] = Parsers.testExprParser
+  lazy val smt2Expr: PackratParser[Expr] =Parsers.allExprParser
   lazy val smt2Ident: PackratParser[Ident] = Parsers.identExprParser
   lazy val smt2Sort: PackratParser[Sort] = Parsers.sortParser
 
@@ -395,7 +395,7 @@ trait SmtParsers extends smts.SmtsParsers[
     lazy val funAppParser: PackratParser[FunApp] = {
       "(" ~> identExprParser ~ rep((anythingParser)) <~ ")" ^^ { case id~args => FunApp(id,args) }
     }
-    lazy val testExprParser: PackratParser[Expr] = exprParser
+    lazy val allExprParser: PackratParser[Expr] = exprParser | arithParser
     lazy val identExprParser: PackratParser[Ident] = identParser ^^ { case id => Ident(id) }
     lazy val realParserAsPair: PackratParser[(String,String)] = {
       intParser ~ "." ~ intParser ^^ { case int~_~dec => (int + dec, "1" + ("0" * dec.length)) } |

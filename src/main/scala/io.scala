@@ -94,8 +94,8 @@ extends SmtsSolvers[Expr,Ident,Sort] {
     def killSolver = solverProcess.destroy
   }
 
-  /** Writes on the solver process input. Only forwards the query
-    * messages (those producing a result). */
+  // /** Writes on the solver process input. Only forwards the query
+  //   * messages (those producing a result). */
   // trait WriterNoSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
   //   override protected def writeAndLog(msg: Messages.ToSmtsMsg) = {
   //     super.writeAndLog(msg)
@@ -106,8 +106,8 @@ extends SmtsSolvers[Expr,Ident,Sort] {
   //   }
   // }
 
-  /** Writes on the solver process input. Forwards all messages to the
-    * reader to parse for '''success'''. */
+  // /** Writes on the solver process input. Forwards all messages to the
+  //   * reader to parse for '''success'''. */
   // trait WriterSuccess[Expr,Ident,Sort] extends SmtsWriter[Expr,Ident,Sort] {
   //   import Messages.ToSmtsMsg
   //   override protected def writeAndLog(msg: Messages.ToSmtsMsg): Unit = {
@@ -150,6 +150,14 @@ extends SmtsSolvers[Expr,Ident,Sort] {
       open - closed
     }
 
+    /** Updates the solver reader on restarts. */
+    protected def restart(newSolverReader: BufferedReader) = {
+      logSpace ; logSpace
+      logResultLine("|=======| RESTART |=======|")
+      logSpace
+      solverReader = newSolverReader
+    }
+
     /** Reads on the solver reader and parses it. */
     protected def readMsg(msg: ToSmtsMsg) = {
 
@@ -184,14 +192,14 @@ extends SmtsSolvers[Expr,Ident,Sort] {
           case _ => loop()
         }
         // printReader("Logging result line.")
-        logResultLine("")
+        logSpace
         phrase(solverInfo.getParser(msg))(
           new PackratReader(new scala.util.parsing.input.CharSequenceReader(text))
         ) match {
           case Success(smtsMsg,_) => notifyMaster(smtsMsg)
           case NoSuccess(msg,next) => notifyMaster(Messages.SolverError(
-            "Error while parsing output of message" :: msg.toString ::
-              msg :: next.pos.longString.split("\n").toList
+            "Error while parsing output of message:" :: msg.toString ::
+              next.pos.longString.split("\n").toList
           ))
         }
       } catch {

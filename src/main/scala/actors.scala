@@ -69,7 +69,7 @@ with SmtsLog[Expr,Ident,Sort] {
     def notifyMaster(msg: FromSmtsMsg) = if (msg != SuccessMsg) master ! msg
 
     def handleMessage(msg: Any) = msg match {
-      case br: BufferedReader => solverReader = br
+      case br: BufferedReader => restart(br)
       case msg: ToSmtsMsg => {
         // printReader("Received a message (reader) " + msg + ".")
         logMsg(msg)
