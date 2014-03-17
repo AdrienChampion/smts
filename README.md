@@ -5,7 +5,7 @@ An actor-based scala library for interactions with [SMT-LIB
 2](www.smtlib.org) compliant SMT solvers.
 
 Smts (S-M-tees) allows to develop algorithms using SMT solvers without
-worrying about which solvers is/are actually used.  Interaction are
+worrying about which solvers is/are actually used.  Interactions are
 asynchronous and follow the actor paradigm thanks to the Akka library.
 Messages are consistent with the SMT-LIB 2 standard and most of them
 correspond directly to SMT-LIB 2 commands.  The actual underlying
@@ -22,13 +22,19 @@ expression to parse. Smts handles the printing and parsing of
 everything but expressions and sorts, consistently with the underlying
 solver.
 
-Upcoming features:
+Features:
+* Smts is parallel thanks to the Akka library.
+* Users send messages corresponding to SMT-LIB 2 commands.
+* Smts supports Z3, CVC4 and MathSat5.
+* No data structure imposed: users instantiate smts on their
+  expression structure, to avoid useless translations.
+* Free restarts: an smts instance can maintain two underlying solver,
+  one active and one passive. When asked to restart, smts will restart
+  the active solver and swap two solvers. As a result restarting an
+  smts instance is seemingly free time-wise. Not that activating free
+  restarts will use more memory.
+
 * dReal (**not implemented yet**): support for the dReal solver.
-* Free restarts (**not implemented yet**): an smts instance can
-  maintain two underlying solver, one active and one passive. When
-  asked to restart, smts will restart the active solver and swap two
-  solvers. As a result restarting an smts instance is seemingly free
-  time-wise. Not that activating free restarts will use more memory.
 * Solver hub (**not implemented yet**): a hub gathers several solvers
   to work concurrently on many jobs at once.
 

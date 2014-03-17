@@ -103,6 +103,11 @@ extends RegexParsers with PackratParsers with LogicsAndSorts {
     /** Dummy message for testing purposes. */
     case class DummyMsg(msg: String) extends ToSmtsMsg
 
+    /** A script allows to send multiple messages at once.
+      * Messages are processed from head to tail.
+      * @param msgs The messages of the script. */
+    case class Script(msgs: Traversable[ToSmtsMsg]) extends ToSmtsMsg
+
     /** Kills the underlying solver process and the Smts actors handling it. */
     object KillSolver extends ToSmtsMsg
 

@@ -38,7 +38,7 @@ extends SmtsActors[Expr,Ident,Sort] {
     /** Creates a new Smts instance.
       * @param client The actor this solver will interact with.
       * @param solverInfo The solver information and configuration.
-      * @param freeRestars If true two solver processes will be used to provide
+      * @param freeRestarts If true two solver processes will be used to provide
       * seemingly free restarts by swapping solvers (default '''false''').
       * @param log Allows to specify a file path for logging (default '''None'''). */
     def apply(
@@ -46,7 +46,8 @@ extends SmtsActors[Expr,Ident,Sort] {
       freeRestarts: Boolean = false, log: Option[String] = None
     ) = {
       _instanceCount += 1
-      Props(new Master(client,solverInfo,log))
+      if (freeRestarts)Props(new MasterFreeRestarts(client,solverInfo,log))
+      else Props(new Master(client,solverInfo,log))
     }
   }
 
@@ -80,6 +81,23 @@ extends SmtsActors[Expr,Ident,Sort] {
     def receive = {
       case msg => handleMessage(msg)
     }
+  }
+
+  /** Master with two solver processes (free restarts). */
+  class MasterFreeRestarts private[smts](
+    client: ActorRef, solverInformation: SolverInfo, log: Option[String]
+  ) extends Master(client, solverInformation, log) {
+    private var solverProcessPassive = createSolverProcess
+
+    override def restart = {
+      solverProcess.destroy
+      solverProcess = solverProcessPassive
+      solverProcessPassive = createSolverProcess
+      _solverWriter = getSolverWriter
+      notifyReader(getSolverReader)
+      initSolver
+    }
+    override def killSolver = { solverProcess.destroy ; solverProcessPassive.destroy }
   }
 
   /** Reader with success parsing. */

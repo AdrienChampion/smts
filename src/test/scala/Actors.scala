@@ -47,6 +47,11 @@ object Actors extends smts.SmtsFactory[
     def log = _log
     def log_= (newLog: String) = _log = Some(newLog)
 
+    // If true free restarts are activated.
+    private var _freeRestarts = false
+    def freeRestarts = _freeRestarts
+    def setFreeRestarts = _freeRestarts = true
+
     // The solver info that will be used.
     private var _solver: SolverInfo = Z3(models = true, unsatCores = true)
     def solver = _solver
@@ -63,6 +68,9 @@ object Actors extends smts.SmtsFactory[
     ) :: (
       "--log=", { s: String => Options.log = optionValue(s) },
       "<file>: a file to log the smt lib 2 queries to." :: Nil
+    ) :: (
+      "--freeRestarts", { s: String => Options.setFreeRestarts },
+      ": activates free restarts." :: Nil
     ) :: (
       "--conf=", { s: String => SolverInfo load optionValue(s) },
       "<file>: an smts configuration file to load." :: Nil
@@ -116,7 +124,7 @@ akka {
     "Creating a smts instance with " + Options.solver.name + " as the solver... "
   )
   val solver = actorSystem.actorOf(
-    Smts(client, Options.solver, log = Options.log),
+    Smts(client, Options.solver, freeRestarts = Options.freeRestarts, log = Options.log),
     name = "solver" + Options.solver.name
   )
 

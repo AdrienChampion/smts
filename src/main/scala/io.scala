@@ -71,7 +71,7 @@ extends SmtsSolvers[Expr,Ident,Sort] {
     import Messages.Restart
 
     /** The solver process. */
-    private var solverProcess = createSolverProcess
+    protected var solverProcess = createSolverProcess
     /** Returns a '''BufferedWriter''' on the solver process. */
     protected def getSolverWriter = new BufferedWriter(
       new OutputStreamWriter(solverProcess.getOutputStream)
@@ -81,7 +81,7 @@ extends SmtsSolvers[Expr,Ident,Sort] {
       new InputStreamReader(solverProcess.getInputStream)
     )
     /** Actual writer on the solver process input. */
-    private var _solverWriter = getSolverWriter
+    protected var _solverWriter = getSolverWriter
     protected def solverWriter = _solverWriter
 
     def restart = {
