@@ -22,7 +22,8 @@ import java.io._
 
 /** Provides writing and reading traits. */
 trait SmtsIO[Expr,Ident,Sort]
-extends SmtsSolvers[Expr,Ident,Sort] {
+extends SmtsSolvers[Expr,Ident,Sort]
+with SmtsLog[Expr,Ident,Sort] {
 
   /** Writes on the solver process input. Forwards all messages to the
     * reader to parse for '''success'''. */
@@ -118,22 +119,24 @@ extends SmtsSolvers[Expr,Ident,Sort] {
 
   /** Reads on the solver process output based on the message it
     * receives. Parses success. */
-  trait SmtsReaderSuccess extends SmtLibParsers {
+  trait SmtsReaderSuccess extends SmtLibParsers with LogFunctions {
     import Messages.{SmtsMsg,ToSmtsMsg,FromSmtsMsg}
     import scala.annotation.tailrec
 
     /** The solver information. */
     protected def solverInfo: SolverInfo
 
+    def initLog = {
+      logResultLine("Solver configuration:")
+      solverInfo.toStringList.foreach(line => logResultLine("  " + line))
+      logSpace
+      logSpace
+      logResultLine("|=======| Starting |=======|")
+      logSpace
+    }
+
     /** Yields a '''Reader''' on the solver process. */
     protected var solverReader: BufferedReader
-
-    /** Logs a command corresponding to a message if logging is activated. */
-    protected def logMsg(msg: ToSmtsMsg) = ()
-    /** Logs the result of a message if logging is activated. */
-    protected def logResultLine(line: String) = ()
-    /** Logs the result of a message if logging is activated. */
-    protected def logSpace = ()
 
     /** Notifies the reader's master on its reading. */
     protected def notifyMaster(msg: FromSmtsMsg)

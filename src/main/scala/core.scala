@@ -111,6 +111,9 @@ extends RegexParsers with PackratParsers with LogicsAndSorts {
     /** Kills the underlying solver process and the Smts actors handling it. */
     object KillSolver extends ToSmtsMsg
 
+    /** Same as '''KillSolver''', also used for launching a job (exit). */
+    object ExitSolver extends ToSmtsMsg
+
     /** Restarts the underlying solver process. */
     object Restart extends ToSmtsMsg {
       import java.io.BufferedReader
@@ -188,6 +191,18 @@ extends RegexParsers with PackratParsers with LogicsAndSorts {
       def unapply(arg: DefineFun) = Some(arg.defs)
     }
 
+    /** Define-ode command, for dReal. */
+    class DefineOde private(
+      val defs: Traversable[(Ident, Expr)]
+    ) extends ToSmtsMsg
+    /** Companion object for '''DefineFun'''. */
+    object DefineOde {
+      def apply(defs: Traversable[(Ident, Expr)]) = new DefineOde(defs)
+      def apply(ident: Ident, expr: Expr) =
+        new DefineOde((ident,expr) :: Nil)
+      def unapply(arg: DefineOde) = Some(arg.defs)
+    }
+
     /** Push command. */
     case class Push(n: Int) extends ToSmtsMsg
     /** Pop command. */
@@ -254,5 +269,10 @@ extends RegexParsers with PackratParsers with LogicsAndSorts {
       override def toString() = "Solver error: {" + msgs + "}"
     }
   }
+
+  /** Exception thrown when an illegal message is received by the master or reader. */
+  class UnexpectedMessageException(val msg: Any) extends Exception(
+    "Unexpected message received by Smts: \"" + msg + "\"."
+  )
 
 }

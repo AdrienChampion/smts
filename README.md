@@ -25,7 +25,13 @@ solver.
 Features:
 * Smts is parallel thanks to the Akka library.
 * Users send messages corresponding to SMT-LIB 2 commands.
-* Smts supports Z3, CVC4 and MathSat5.
+* Smts supports Z3, CVC4 and MathSat5. Examples are provided in
+  src/test/scala/Actors.scala.
+* dReal: support for the dReal solver. DReal HAS NO INTERACTIVE MODE
+  and only supports checksats. After your CheckSat message, you should
+  send an ExitSolver message to get the answer back. The solver then
+  restarts and a new job can be sent. See src/test/scala/DReal.scala
+  to see how to use it.
 * No data structure imposed: users instantiate smts on their
   expression structure, to avoid useless translations.
 * Free restarts: an smts instance can maintain two underlying solver,
@@ -34,7 +40,6 @@ Features:
   smts instance is seemingly free time-wise. Not that activating free
   restarts will use more memory.
 
-* dReal (**not implemented yet**): support for the dReal solver.
 * Solver hub (**not implemented yet**): a hub gathers several solvers
   to work concurrently on many jobs at once.
 

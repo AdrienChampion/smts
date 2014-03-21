@@ -68,6 +68,10 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
       })
       w write " ) " ; sort2Smt(defi._3,w) ; w write " " ; expr2Smt(defi._4,w) ; w write ")\n"
     }
+    def printDefineOde(w: Writer, defi: (Ident, Expr)) = {
+      w write "(define-ode " ; ident2Smt(defi._1,w) ; w write " ("
+      expr2Smt(defi._2,w) ; w write "))\n"
+    }
 
 
     // |=====| Queries.
@@ -102,11 +106,11 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
     // |=====| Function handling the messages.
 
     /** Calls the proper print function base on the input message. */
-    def writeMsg(msg: Messages.ToSmtsMsg, w: Writer) = {
+    def writeMsg(msg: Messages.ToSmtsMsg, w: Writer): Unit = {
       import Messages._
       msg match {
         case DummyMsg(msg) => { w write "Dummy[" ; w write msg ; w write "]\n" }
-        case KillSolver => printExit(w)
+        case KillSolver | ExitSolver => printExit(w)
         case SetOption(option) => printSetOption(w, option)
         case SetInfo(info,value) => printSetInfo(w, info, value)
         case SetLogic(logic) => printSetLogic(w, logic)
@@ -114,6 +118,7 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
         case DefineSort(defs) => defs foreach (defi => printDefineSort(w, defi))
         case DeclareFun(decs) => decs foreach (dec => printDeclareFun(w, dec))
         case DefineFun(defs) => defs foreach (defi => printDefineFun(w, defi))
+        case DefineOde(defs) => defs foreach (defi => printDefineOde(w, defi))
         case Push(n) => printPush(w, n)
         case Pop(n) => printPop(w, n)
         case CheckSat => printCheckSat(w)
@@ -121,9 +126,22 @@ trait SmtsPrinters[Expr,Ident,Sort] extends SmtsCore[Expr, Ident, Sort] {
         case GetValue(exprs) => printGetValue(w, exprs)
         case GetUnsatCore => printGetUnsatCore(w)
         case Assert(expr,label) => printAssert(w,expr,label)
+        case Script(msgs) => msgs foreach (msg => writeMsg(msg,w))
         case msg => throw new Exception("Unexpected message: " + msg)
       }
       w.flush
+    }
+
+    def msgToString(msg: Messages.ToSmtsMsg) = {
+      val sw = new java.io.StringWriter()
+      writeMsg(msg,sw)
+      val result = sw.toString.split("\n").toList match {
+        case h :: Nil => h
+        case h :: t => t.foldLeft(h)((s,e) => s + " " + e)
+        case Nil => throw new Exception("Message " + msg + " did not generate anything.")
+      }
+      sw.close
+      result
     }
 
   }

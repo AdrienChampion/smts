@@ -31,5 +31,5 @@ resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/release
 exportJars := true
 
 libraryDependencies +=
-  "com.typesafe.akka" %% "akka-actor" % "2.2.3"
+  "com.typesafe.akka" %% "akka-actor" % "2.3.0"
 //  "commons-lang" % "commons-lang" % "2.6"

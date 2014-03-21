@@ -20,10 +20,13 @@ package smts
 
 import scala.util.parsing.combinator.RegexParsers
 
+import akka.actor._
+
 /** Trait gathering the solver information for the underlying solvers. */
 trait SmtsSolvers[Expr,Ident,Sort]
 extends SmtsCore[Expr,Ident,Sort]
 with SmtsPrinters[Expr,Ident,Sort]
+with SmtsLog[Expr,Ident,Sort]
 with SmtsParsers[Expr,Ident,Sort] {
 
   // |=====| Solver info.
@@ -59,6 +62,19 @@ with SmtsParsers[Expr,Ident,Sort] {
 
     /** Commands to write when launching the solver. */
     val startMsgs: List[ToSmtsMsg]
+
+    def toStringList = {
+      ("name:         " + name) ::
+      ("baseCommand:  " + baseCommand) ::
+      ("options:      " + options) ::
+      ("success:      " + success) ::
+      ("models:       " + models) ::
+      ("unsatCores:   " + unsatCores) ::
+      ("timeout:      " + timeout) ::
+      ("timeoutQuery: " + timeoutQuery) ::
+      ("initWith:     " + initWith.map(SolverInfo.msgToString(_))) ::
+      ("command:      " + command) :: Nil
+    }
 
     /** Converts an integer in milliseconds to its string representation in
       * seconds. */
@@ -110,6 +126,11 @@ with SmtsParsers[Expr,Ident,Sort] {
         newInitWith getOrElse initWith,
         newTimeout getOrElse timeout,
         newTimeoutQuery getOrElse timeoutQuery,
+        newOptions getOrElse options
+      )
+      case _: DReal      => DReal(
+        newBaseCommand getOrElse baseCommand,
+        newInitWith getOrElse initWith,
         newOptions getOrElse options
       )
     }
@@ -215,9 +236,156 @@ with SmtsParsers[Expr,Ident,Sort] {
   }
 
 
+  /** Solver information class for dReal. */
+  class DReal private(
+    val baseCommand: String = "dReal",
+    val initWith: List[Messages.ToSmtsMsg] = Nil,
+    val options: String = ""
+  ) extends SolverInfo {
+    // Does not apply to dReal.
+    val success = false
+    val models = false
+    val unsatCores = false
+    val timeout = None
+    val timeoutQuery = None
+
+    val command = baseCommand + " " + options
+    val name = "dReal"
+    val startMsgs = initWith
+
+    override def toStringList = {
+      ("name:         " + name) ::
+      ("baseCommand:  " + baseCommand) ::
+      ("options:      " + options) ::
+      ("initWith:     " + initWith.map(SolverInfo.msgToString(_))) ::
+      ("command:      " + command) :: Nil
+    }
+  }
+
+  object DReal {
+
+    def apply(
+      baseCommand: String = "dReal",
+      initWith: List[Messages.ToSmtsMsg] = Nil,
+      options: String = ""
+    ) = new DReal(baseCommand,initWith,options)
+    def unapply(that: DReal) = Some((that.baseCommand,that.initWith,that.options))
+
+    /** Defining the whole dReal actor here. */
+    class Master private[smts] (
+      val client: ActorRef, val solverInfo: SolverInfo, val log: Option[String]
+    ) extends SmtLibPrinters with Actor {
+      import Messages._
+      import java.io._
+
+      /** Initializes the solver by sending the start messages. */
+      protected def initSolver = solverInfo.startMsgs foreach (msg => {
+        writeMsg(msg,sw) ; reader ! msg
+      })
+
+      override def preStart = initSolver
+      override def postStop = { context stop reader ; solverProcess.destroy }
+
+      protected val reader = context.actorOf(Props(log match {
+        case None => new DReader(self,solverInfo)
+        case Some(path) => new DReader(self,solverInfo) with ReaderLog {
+          def logFilePath = path
+        }
+      }), name = "reader")
+
+      /** Creates a new solver process. */
+      protected def createSolverProcess = (new ProcessBuilder(
+        solverInfo.command.split(" "): _*
+      )).redirectErrorStream(true).start
+
+      /** The solver process. */
+      protected var solverProcess = createSolverProcess
+      /** Returns a '''BufferedWriter''' on the solver process. */
+      protected def getSolverWriter = new BufferedWriter(
+        new OutputStreamWriter(solverProcess.getOutputStream)
+      )
+      /** Returns a '''BufferedReader''' on the solver process. */
+      protected def getSolverReader = new BufferedReader(
+        new InputStreamReader(solverProcess.getInputStream)
+      )
+      /** Actual writer on the solver process input. */
+      protected var _solverWriter = getSolverWriter
+      protected def solverWriter = _solverWriter
+      /** Actual reader on the solver process input. */
+      protected var _solverReader = getSolverReader
+      protected def solverReader = _solverReader
+
+      protected var sw = new StringWriter()
+      protected def reset = {
+        sw = new StringWriter()
+        solverProcess = createSolverProcess
+        _solverWriter = getSolverWriter
+        _solverReader = getSolverReader
+        initSolver
+      }
+
+      def receive = {
+        case msg => handleMsg(msg)
+      }
+
+      def handleMsg(msg: Any): Unit = msg match {
+        case Script(msgs) => msgs foreach (m => handleMsg(m))
+        case Restart => reset
+        case ExitSolver => {
+          reader ! ExitSolver
+          sw write "(exit)\n"
+          solverWriter write sw.toString
+          solverWriter.close
+          reader ! solverReader
+          reset
+        }
+        case msg: ToSmtsMsg => { reader ! msg ; writeMsg(msg,sw) }
+        case msg: FromSmtsMsg => client ! msg
+        case msg => throw new UnexpectedMessageException(msg)
+      }
+
+    }
+
+    private[smts] class DReader(
+      val master: ActorRef, val solverInfo: SolverInfo
+    ) extends Actor with LogFunctions {
+      import Messages._
+
+      override def preStart = {
+        logResultLine("Solver configuration:")
+        solverInfo.toStringList.foreach(line => logResultLine("  " + line))
+        logSpace
+        logSpace
+        logResultLine("|=======| Starting |=======|")
+        logSpace
+      }
+
+      def receive = {
+        case br: java.io.BufferedReader => {
+          def loop(line: String): String =
+            if (line == null || line.trim == "") loop(br.readLine) else line
+          val line = loop("")
+          line match {
+            case "sat" => master ! Sat
+            case "unsat" => master ! Unsat
+            case "unknown" => master ! Unknown
+            case line => master ! SolverError("Unexpected dReal answer:" :: line :: Nil)
+          }
+          logResultLine(line)
+          logSpace ; logSpace
+          logResultLine("|=======| RESTART |=======|")
+          logSpace
+        }
+        case msg: ToSmtsMsg => logMsg(msg: ToSmtsMsg)
+      }
+
+    }
+  }
+
+
   /** Solver information object, can load a configuration file and
     * create user specified configurations. */
-  object SolverInfo extends RegexParsers {
+  object SolverInfo extends RegexParsers with SmtLibPrinters {
     import scala.collection.mutable.HashMap
     /** Stores the mappings from user defined identifiers to solver infos. */
     private val idMap = new HashMap[String,SolverInfo]

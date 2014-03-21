@@ -75,6 +75,18 @@ object ExprStructure {
     def unapply(arg: FunApp) = Some((arg.id,arg.args))
   }
 
+  /** Differential. */
+  class Ddt private(val id: Ident) extends BoolExpr with ArithExpr {
+    def writeTo(w: Writer) = {
+      w write "d/dt[" ; id writeTo w ; w write "]"
+    }
+    override def toString() = "d/dt[" + id + "]"
+  }
+  object Ddt extends ConsignedExpr[(Ident),Ddt] {
+    def apply(id: Ident) = consign.getOrElseUpdate((id), new Ddt(id))
+    def unapply(arg: Ddt) = Some(arg.id)
+  }
+
   /** Extended by all the Boolean expressions. */
   sealed trait BoolExpr extends Expr
 
@@ -280,7 +292,7 @@ object ExprStructure {
     override def toString() = num + "/" + den
   }
   object RatConst extends ConsignedExpr[(BigInt,BigInt), RatConst] {
-    def apply(num: BigInt, den: BigInt) = consign.getOrElseUpdate((num,den), new RatConst(num,den))
+    def apply(num: BigInt, den: BigInt = 1) = consign.getOrElseUpdate((num,den), new RatConst(num,den))
     def fromDec(integer: String, decimals: String) = {
       val (num,den) = (BigInt(integer + decimals), BigInt("1" + ("0" * decimals.size)))
       apply(num,den)
@@ -342,6 +354,10 @@ object ExprStructure {
   object IntSort extends Sort {
     def writeTo(w: Writer) = w write "Int"
     override def toString() = "Int"
+  }
+  object RealSort extends Sort {
+    def writeTo(w: Writer) = w write "Real"
+    override def toString() = "Real"
   }
   object BoolSort extends Sort {
     def writeTo(w: Writer) = w write "Bool"

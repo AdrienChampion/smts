@@ -46,8 +46,15 @@ extends SmtsActors[Expr,Ident,Sort] {
       freeRestarts: Boolean = false, log: Option[String] = None
     ) = {
       _instanceCount += 1
-      if (freeRestarts)Props(new MasterFreeRestarts(client,solverInfo,log))
-      else Props(new Master(client,solverInfo,log))
+      solverInfo match {
+        case _: DReal => {
+          Props(new DReal.Master(client, solverInfo, log))
+        }
+        case _ => {
+          if (freeRestarts) Props(new MasterFreeRestarts(client,solverInfo,log))
+          else Props(new Master(client,solverInfo,log))
+        }
+      }
     }
   }
 

@@ -21,10 +21,20 @@ package smts
 import java.io.{Writer,BufferedWriter,FileWriter}
 
 /** Provides the '''ReaderLog''' trait. */
-trait SmtsLog[Expr,Ident,Sort] extends SmtsIO[Expr,Ident,Sort] {
+trait SmtsLog[Expr,Ident,Sort] extends SmtsPrinters[Expr,Ident,Sort] {
+
+  trait LogFunctions {
+    import Messages.ToSmtsMsg
+    /** Logs a command corresponding to a message if logging is activated. */
+    protected def logMsg(msg: ToSmtsMsg) = ()
+    /** Logs the result of a message if logging is activated. */
+    protected def logResultLine(line: String) = ()
+    /** Logs the result of a message if logging is activated. */
+    protected def logSpace = ()
+  }
 
   /** Reader should extend this trait to activate logging. */
-  trait ReaderLog extends SmtsReaderSuccess with SmtLibPrinters {
+  trait ReaderLog extends /*SmtsReaderSuccess with*/ SmtLibPrinters with LogFunctions{
     import Messages.ToSmtsMsg
 
     /** Path to the logging file. */

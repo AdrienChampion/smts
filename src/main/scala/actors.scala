@@ -24,8 +24,7 @@ import akka.actor._
 
 /** Provides basic actor traits. */
 trait SmtsActors[Expr,Ident,Sort]
-extends SmtsIO[Expr,Ident,Sort]
-with SmtsLog[Expr,Ident,Sort] {
+extends SmtsIO[Expr,Ident,Sort] {
 
   /** Actor the user interacts with, also writes on the solver process input. */
   trait MasterActor extends Actor with SmtsWriter {
@@ -66,23 +65,17 @@ with SmtsLog[Expr,Ident,Sort] {
     /** The '''MasterActor''' this actor interacts with. */
     protected val master: ActorRef
 
+    override def preStart = { initLog }
+
     def notifyMaster(msg: FromSmtsMsg) = if (msg != SuccessMsg) master ! msg
 
     def handleMessage(msg: Any) = msg match {
       case br: BufferedReader => restart(br)
-      case msg: ToSmtsMsg => {
-        // printReader("Received a message (reader) " + msg + ".")
-        logMsg(msg)
-        readMsg(msg)
-      }
+      case Messages.Script(msgs) => msgs foreach (msg => { logMsg(msg) ; readMsg(msg) } )
+      case msg: ToSmtsMsg => { logMsg(msg) ; readMsg(msg) }
       case msg => throw new UnexpectedMessageException(msg)
     }
 
   }
-
-  /** Exception thrown when an illegal message is received by the master or reader. */
-  class UnexpectedMessageException(val msg: Any) extends Exception(
-    "Unexpected message received by Smts: \"" + msg + "\"."
-  )
 
 }

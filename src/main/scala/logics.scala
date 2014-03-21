@@ -45,6 +45,9 @@ trait LogicsAndSorts {
     /** Quantifier Free Linear Real Arithmetic. */
     case object QF_LRA extends Logic { val asString = "QF_LRA" }
 
+    /** Quantifier Free Non linear Real Arithmetic. */
+    case object QF_NRA extends Logic { val asString = "QF_NRA" }
+
     /** Quantifier Free Arrays, arbitrary Uninterpreted sorts and Functions,
       * Linear Integer Arithmetic. */
     case object QF_AUFLIA extends Logic { val asString = "QF_AUFLIA" }

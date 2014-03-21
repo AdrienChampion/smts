@@ -105,10 +105,12 @@ akka {
   val client = actorSystem.actorOf(Props(new SolverBenchs {
     def act = {
       case solver: ActorRef =>
-        TestBool   run (() =>
-          TestLIA  run (() =>
-            TestUF run (() =>
-              killSystem()
+        TestBool     run (() =>
+          TestLIA    run (() =>
+            TestLRA  run (() =>
+              TestUF run (() =>
+                killSystem()
+              )
             )
           )
         )
@@ -140,7 +142,7 @@ akka {
   trait SolverBenchs extends Actor {
     import ExprStructure._
     import Messages._
-    import Logics.{Logic,QF_LIA,QF_AUFLIA}
+    import Logics.{Logic,QF_LIA,QF_AUFLIA,QF_LRA}
 
     def unexpected(msg: Any) = {
       msg match {
@@ -263,7 +265,7 @@ akka {
         val expr1 = Lt(IntConst(42),n)
         val expr2 = Gt(m,IntConst(7))
         val expr3 = Not(Ge(IntConst(36), Plus(m,IntConst(7))))
-        title("Starting CHECKSAT test " + logicDescr + ".")
+        title("Starting MODEL test " + logicDescr + ".")
         modelTest(
           QF_LIA, (n,Nil,IntSort) :: (m,Nil,IntSort) :: Nil,
           (expr1,None) :: (expr2,None) :: Nil, msg => continuation()
@@ -295,6 +297,75 @@ akka {
             unsatCoreTest(
               QF_LIA,
               (n,Nil,IntSort) :: (m,Nil,IntSort) :: Nil,
+              list, map, msg => continuation()
+            )
+          }
+        }
+      }
+
+    }
+
+
+    object TestLRA extends AbstractTests {
+
+      val logicDescr = "in QF_LRA"
+
+      val x = Ident("x")
+      val y = Ident("y")
+
+      def run(continuation: () => Unit) =
+        checksat     (() => { restart() ; println
+          model      (() => { restart() ; println
+            unsatCore(() => { restart() ; println
+              continuation()
+            })
+          })
+        })
+
+      def checksat(continuation: () => Unit): Unit = {
+        val expr1 = Gt(RatConst(42),x)
+        val expr2 = Not(Ge(RatConst(7), x))
+        title("Starting CHECKSAT test " + logicDescr + ".")
+        checksatTest(
+          QF_LRA, (x,Nil,RealSort) :: Nil,
+          (expr1,None) :: (expr2,None) :: Nil, msg => continuation()
+        )
+      }
+
+      def model(continuation: () => Unit): Unit = {
+        val expr1 = Lt(RatConst(42),x)
+        val expr2 = Gt(y,RatConst(7))
+        val expr3 = Not(Ge(RatConst(36), Plus(y,RatConst(7))))
+        title("Starting Model test " + logicDescr + ".")
+        modelTest(
+          QF_LRA, (x,Nil,RealSort) :: (y,Nil,RealSort) :: Nil,
+          (expr1,None) :: (expr2,None) :: Nil, msg => continuation()
+        )
+      }
+
+      def unsatCore(continuation: () => Unit): Unit = {
+        title("Starting UNSAT CORE test " + logicDescr + ".")
+        Options.solver match {
+          case _: CVC4 => {
+            println("Unsat cores are not implemented in CVC4, skipping this test.")
+            continuation()
+          }
+          case _ => {
+            val label1 = "label1"
+            val label2 = "label2"
+            val label3 = "label3"
+            val label4 = "label4"
+            val expr1 = Le(RatConst(0),x)
+            val expr2 = Lt(y,RatConst(42))
+            val expr3 = Gt(Plus(x,y), RatConst(46))
+            val expr4 = Le(x,RatConst(1))
+            val map = new HashMap[String,Expr] +
+            ((label1, expr1)) + ((label2, expr2)) + ((label3, expr3)) + ((label4, expr4))
+            val list: List[(Expr,Option[String])] =
+              map.toList map (pair => (pair._2,Some(pair._1)))
+            unsatCoreTest(
+              QF_LRA,
+              (x,Nil,RealSort) :: (y,Nil,RealSort) :: Nil,
               list, map, msg => continuation()
             )
           }
@@ -419,6 +490,43 @@ akka {
         }
       }
 
+      def checksatScriptTest(
+        logic: Logic,
+        funs: Traversable[(Ident,Traversable[Sort],Sort)],
+        exprs: Traversable[(Expr,Option[String])],
+        continuation: FromSmtsMsg => Unit
+      ): Unit = {
+        println("Doing the following with one script:")
+        println("> Setting logic to " + logic + ".")
+        println("> Declaring function symbol(s)")
+        funs foreach (fun => {
+          println(" > " + fun)
+        })
+        println("Asserting")
+        exprs foreach (expr => {
+          println(
+            "> " + (
+              if (expr._2.isDefined) "\033[1m(" + expr._2.get + ")\033[0m " else ""
+            ) + expr._1
+          )
+          
+        })
+        println("Checksat.")
+        solver ! Script(
+          SetLogic(logic) :: DeclareFun(funs) :: (exprs.toList.map(e => Assert(e._1,e._2)) :+ CheckSat)
+        )
+
+        context become {
+          case Sat => { println("> Sat.") ; context become act ; continuation(Sat) }
+          case Unsat => { println("> Unsat.") ; context become act ; continuation(Unsat) }
+          case Unknown => {
+            println("> Solver can't decide satisfiability.")
+            context become act ; continuation(Unknown)
+          }
+          case msg => unexpected(msg)
+        }
+      }
+
 
       def modelTest(
         logic: Logic,
@@ -426,7 +534,7 @@ akka {
         exprs: Traversable[(Expr,Option[String])],
         continuation: FromSmtsMsg => Unit
       ): Unit = {
-        checksatTest(logic,funs,exprs, msg => msg match {
+        checksatScriptTest(logic,funs,exprs, msg => msg match {
           case Sat => {
 
             println("Getting model.")
