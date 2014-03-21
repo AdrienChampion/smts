@@ -32,6 +32,7 @@ Features:
   send an ExitSolver message to get the answer back. The solver then
   restarts and a new job can be sent. See src/test/scala/DReal.scala
   to see how to use it.
+  Note that dReal DOES NOT SUPPORT FREE RESTARTS as of today.
 * No data structure imposed: users instantiate smts on their
   expression structure, to avoid useless translations.
 * Free restarts: an smts instance can maintain two underlying solver,
